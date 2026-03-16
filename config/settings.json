@@ -1,0 +1,18 @@
+{
+    "serial_port": "/dev/ttyUSB0",
+    "serial_baud": 115200,
+    "display_width": 480,
+    "display_height": 320,
+    "font_size_large": 18,
+    "font_size_normal": 13,
+    "font_size_small": 10,
+    "bg_color": "#0a0a0a",
+    "fg_color": "#00ff41",
+    "accent_color": "#00cc33",
+    "dim_color": "#005510",
+    "error_color": "#ff3333",
+    "max_messages": 100,
+    "node_timeout_sec": 300,
+    "refresh_interval_ms": 500,
+    "node_name": "MESH-PI"
+}

@@ -1,0 +1,21 @@
+[Unit]
+Description=Meshtastic Terminal UI
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/Mesh-pi
+
+# Fullscreen on the Pi display; hide mouse cursor
+Environment="DISPLAY=:0"
+Environment="MESHTASTIC_FULLSCREEN=1"
+Environment="MESHTASTIC_HIDE_CURSOR=1"
+
+ExecStart=/usr/bin/python3 /home/pi/Mesh-pi/main.py
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
