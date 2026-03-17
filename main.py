@@ -24,6 +24,7 @@ All cross-thread GUI updates go through widget.after(0, fn).
 
 import json
 import logging
+import logging.handlers
 import os
 import sys
 import tkinter as tk
@@ -35,6 +36,7 @@ sys.path.insert(0, ROOT)
 from radio.meshtastic_client import MeshtasticClient
 from hardware.gpio_manager import GPIOManager
 from hardware.i2c_manager import I2CManager
+from ui.log_buffer import ui_log_handler
 from ui.home_screen import HomeScreen
 from ui.chat_screen import ChatScreen
 from ui.nodes_screen import NodesScreen
@@ -43,12 +45,33 @@ from ui.settings_screen import SettingsScreen
 from ui.keyboard import OnScreenKeyboard
 
 # ── logging ────────────────────────────────────────────────────────────────
+_LOG_FORMAT  = "%(asctime)s  %(levelname)-7s  %(name)s  %(message)s"
+_LOG_DATEFMT = "%H:%M:%S"
+
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(levelname)-7s  %(name)s  %(message)s",
-    datefmt="%H:%M:%S",
+    level=logging.DEBUG,
+    format=_LOG_FORMAT,
+    datefmt=_LOG_DATEFMT,
 )
+
+# In-memory buffer (shown in the debug screen)
+ui_log_handler.setLevel(logging.DEBUG)
+logging.getLogger().addHandler(ui_log_handler)
+
+# Rotating file log in /tmp (survives the session, readable via SSH)
+# Two 256 KB files → max 512 KB on the SD card / tmpfs
+_file_handler = logging.handlers.RotatingFileHandler(
+    "/tmp/meshtastic-ui.log",
+    maxBytes=256 * 1024,
+    backupCount=2,
+    encoding="utf-8",
+)
+_file_handler.setFormatter(logging.Formatter(_LOG_FORMAT, _LOG_DATEFMT))
+_file_handler.setLevel(logging.DEBUG)
+logging.getLogger().addHandler(_file_handler)
+
 logger = logging.getLogger("main")
+logger.info("Avvio Meshtastic UI — log su /tmp/meshtastic-ui.log")
 
 _SCREEN_ORDER = ["home", "chat", "nodes", "debug", "settings"]
 
