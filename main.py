@@ -36,6 +36,7 @@ sys.path.insert(0, ROOT)
 from radio.meshtastic_client import MeshtasticClient
 from hardware.gpio_manager import GPIOManager
 from hardware.i2c_manager import I2CManager
+from hardware.watchdog import ThreadWatchdog
 from ui.log_buffer import ui_log_handler
 from ui.home_screen import HomeScreen
 from ui.chat_screen import ChatScreen
@@ -125,12 +126,31 @@ class App(tk.Tk):
         self._configure_window()
         self._build_screens()
         self._wire_hardware()
+        self._start_watchdog()
         self.navigate("home")
 
         self.protocol("WM_DELETE_WINDOW", self._on_quit)
 
         # Start periodic telemetry sampling (every 30s)
         self.after(30000, self._sample_telemetry)
+
+    # ------------------------------------------------------------------ #
+    # Watchdog                                                              #
+    # ------------------------------------------------------------------ #
+
+    def _start_watchdog(self):
+        """Start a ThreadWatchdog that monitors background threads."""
+        self.watchdog = ThreadWatchdog(check_interval=10.0)
+
+        # Monitor the meshtastic reader thread (if running with real HW)
+        if self.client._thread is not None:
+            self.watchdog.watch(
+                self.client._thread,
+                lambda name: logger.warning("Watchdog: radio thread '%s' died — client reconnect handles restart", name),
+            )
+
+        self.watchdog.start()
+        logger.info("ThreadWatchdog avviato (check ogni 10s)")
 
     # ------------------------------------------------------------------ #
     # Window setup                                                         #
@@ -325,6 +345,7 @@ class App(tk.Tk):
 
     def _on_quit(self):
         logger.info("shutting down")
+        self.watchdog.stop()
         self.hw.stop()
         self.i2c.stop()
         self.client.stop()
