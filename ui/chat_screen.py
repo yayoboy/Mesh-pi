@@ -111,6 +111,7 @@ class ChatScreen(BaseScreen):
         )
         self._entry.grid(row=0, column=0, sticky="ew", padx=(0, 4))
         self._entry.bind("<Return>", lambda _e: self._send())
+        self.bind_touch_entry(self._entry)
 
         self._btn_send = self.button(bar, "INVIA", self._send, width=6)
         self._btn_send.grid(row=0, column=1)

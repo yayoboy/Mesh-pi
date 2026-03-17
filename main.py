@@ -32,6 +32,7 @@ from ui.home_screen import HomeScreen
 from ui.chat_screen import ChatScreen
 from ui.nodes_screen import NodesScreen
 from ui.debug_screen import DebugScreen
+from ui.keyboard import OnScreenKeyboard
 
 # ── logging ────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -109,6 +110,12 @@ class App(tk.Tk):
             )
             screen.grid(row=0, column=0, sticky="nsew")
             self._screens[name] = screen
+
+        # Create one shared on-screen keyboard and inject it into every screen.
+        # It is a Toplevel so it floats above the main window on the Pi display.
+        self._keyboard = OnScreenKeyboard(self, self.cfg)
+        for screen in self._screens.values():
+            screen.keyboard = self._keyboard
 
         self._current: str = ""
 

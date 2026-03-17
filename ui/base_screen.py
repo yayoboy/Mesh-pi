@@ -5,12 +5,16 @@ Every screen inherits from this class and gets:
   - self.cfg       : settings dict
   - self.client    : MeshtasticClient
   - self.navigate  : callable(screen_name) for screen switching
+  - self.keyboard  : OnScreenKeyboard (shared, set by App after build)
   - colour helpers : bg, fg, accent, dim, err
   - font helpers   : font_large, font_normal, font_small (monospace)
+
+Touch input:
+  Call self.bind_touch_entry(entry_widget) on any Entry to make the
+  on-screen keyboard pop up automatically when the field is tapped.
 """
 
 import tkinter as tk
-from tkinter import font as tkfont
 
 
 class BaseScreen(tk.Frame):
@@ -20,6 +24,7 @@ class BaseScreen(tk.Frame):
         self.cfg = cfg
         self.client = client
         self.navigate = navigate
+        self.keyboard = None   # injected by App after all screens are built
 
         # Colours
         self.bg = cfg["bg_color"]
@@ -72,6 +77,42 @@ class BaseScreen(tk.Frame):
             relief="flat", bd=0,
             width=width, pady=4,
         )
+
+    def bind_touch_entry(self, entry: tk.Entry) -> None:
+        """
+        Attach on-screen keyboard behaviour to an Entry widget.
+
+        - FocusIn  → show keyboard
+        - FocusOut → hide keyboard (unless focus moved to the keyboard itself)
+        - <Return> → hide keyboard
+        """
+        def _show(_event):
+            if self.keyboard:
+                self.keyboard.show(entry)
+
+        def _hide(_event):
+            # Small delay so the keyboard's own buttons can receive the click
+            # before we decide to hide.
+            entry.after(150, _maybe_hide)
+
+        def _maybe_hide():
+            if self.keyboard and self.keyboard.is_visible():
+                focused = entry.focus_get()
+                # Keep visible if focus is still on the entry or inside keyboard
+                if focused is entry:
+                    return
+                if focused and str(focused).startswith(
+                        str(self.keyboard._win)):
+                    return
+                self.keyboard.hide()
+
+        def _enter_key(_event):
+            if self.keyboard:
+                self.keyboard.hide()
+
+        entry.bind("<FocusIn>",  _show,     add="+")
+        entry.bind("<FocusOut>", _hide,     add="+")
+        entry.bind("<Return>",   _enter_key, add="+")
 
     def separator(self, parent, **kw) -> tk.Frame:
         return tk.Frame(parent, bg=self.dim, height=1, **kw)
