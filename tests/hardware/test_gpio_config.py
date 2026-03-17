@@ -50,3 +50,14 @@ def test_configurator_from_settings():
     assert cfg.get(17) == "encoder CLK"
     assert cfg.get(18) == "encoder DT"
     assert cfg.get(27) == "encoder SW"
+
+def test_configurator_buttons_roundtrip():
+    cfg = GPIOConfigurator()
+    cfg.assign(22, "button")
+    d = cfg.to_settings_dict()
+    # buttons deve essere una lista
+    assert isinstance(d["buttons"], list)
+    assert d["buttons"][0]["pin"] == 22
+    # roundtrip
+    cfg2 = GPIOConfigurator.from_settings(d)
+    assert cfg2.get(22) == "button"

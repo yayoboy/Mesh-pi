@@ -85,7 +85,7 @@ class GPIOConfigurator:
     def to_settings_dict(self) -> dict:
         result: dict = {
             "encoder": {},
-            "buttons": {},
+            "buttons": [],
             "buzzer":  {},
             "gps":     {},
         }
@@ -96,21 +96,24 @@ class GPIOConfigurator:
         for pin, fn in effective.items():
             if fn in _FUNCTION_TO_SETTING:
                 section, key = _FUNCTION_TO_SETTING[fn]
-                result[section][key] = pin
+                if section == "buttons":
+                    result["buttons"].append({"pin": pin})
+                else:
+                    result[section][key] = pin
         return result
 
     @classmethod
     def from_settings(cls, hw_cfg: dict) -> "GPIOConfigurator":
         cfg = cls()
         enc = hw_cfg.get("encoder", {})
-        if enc.get("pin_clk"): cfg.assign(enc["pin_clk"], "encoder CLK")
-        if enc.get("pin_dt"):  cfg.assign(enc["pin_dt"],  "encoder DT")
-        if enc.get("pin_sw"):  cfg.assign(enc["pin_sw"],  "encoder SW")
+        if enc.get("pin_clk") is not None: cfg.assign(enc["pin_clk"], "encoder CLK")
+        if enc.get("pin_dt")  is not None: cfg.assign(enc["pin_dt"],  "encoder DT")
+        if enc.get("pin_sw")  is not None: cfg.assign(enc["pin_sw"],  "encoder SW")
         for btn in hw_cfg.get("buttons", []):
-            if btn.get("pin"): cfg.assign(btn["pin"], "button")
+            if btn.get("pin") is not None: cfg.assign(btn["pin"], "button")
         buz = hw_cfg.get("buzzer", {})
-        if buz.get("pin"): cfg.assign(buz["pin"], "buzzer")
+        if buz.get("pin") is not None: cfg.assign(buz["pin"], "buzzer")
         gps = hw_cfg.get("gps", {})
-        if gps.get("pin_tx"): cfg.assign(gps["pin_tx"], "GPS TX")
-        if gps.get("pin_rx"): cfg.assign(gps["pin_rx"], "GPS RX")
+        if gps.get("pin_tx") is not None: cfg.assign(gps["pin_tx"], "GPS TX")
+        if gps.get("pin_rx") is not None: cfg.assign(gps["pin_rx"], "GPS RX")
         return cfg
