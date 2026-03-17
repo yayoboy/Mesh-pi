@@ -41,7 +41,7 @@ from ui.home_screen import HomeScreen
 from ui.chat_screen import ChatScreen
 from ui.nodes_screen import NodesScreen
 from ui.debug_screen import DebugScreen
-from ui.settings_screen import SettingsScreen
+from ui.settings import SettingsScreen
 from ui.keyboard import OnScreenKeyboard
 
 # ── logging ────────────────────────────────────────────────────────────────
