@@ -18,6 +18,7 @@ Layouts:
 """
 
 import tkinter as tk
+from typing import Optional
 
 
 # ── Key layout definitions ─────────────────────────────────────────────────
@@ -59,7 +60,7 @@ class OnScreenKeyboard:
     def __init__(self, root: tk.Tk, cfg: dict):
         self._root = root
         self._cfg = cfg
-        self._target: tk.Entry | None = None
+        self._target: Optional[tk.Entry] = None
         self._layout = "alpha"
 
         self._win = tk.Toplevel(root)

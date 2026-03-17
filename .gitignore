@@ -1,0 +1,22 @@
+# Virtual environment (created by install.sh)
+.venv/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Logs and runtime state
+*.log
+*.pid
+
+# Editor / OS artifacts
+.DS_Store
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Secrets / local config overrides
+config/settings.local.json

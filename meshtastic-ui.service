@@ -1,21 +1,30 @@
 [Unit]
 Description=Meshtastic Terminal UI
-After=network.target
+# Start after display server and D-Bus are ready
+After=network.target dbus.service
 
 [Service]
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/Mesh-pi
 
-# Fullscreen on the Pi display; hide mouse cursor
+# Use the venv Python so all pip-installed deps are available.
+# install.sh patches these paths automatically.
+ExecStart=/home/pi/Mesh-pi/.venv/bin/python3 /home/pi/Mesh-pi/main.py
+
+# Display and cursor settings for the Pi touchscreen
 Environment="DISPLAY=:0"
 Environment="MESHTASTIC_FULLSCREEN=1"
 Environment="MESHTASTIC_HIDE_CURSOR=1"
 
-ExecStart=/usr/bin/python3 /home/pi/Mesh-pi/main.py
-
+# Restart on failure with a short back-off
 Restart=on-failure
 RestartSec=5
+
+# Log to journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=meshtastic-ui
 
 [Install]
 WantedBy=multi-user.target

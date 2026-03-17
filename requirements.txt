@@ -1,3 +1,28 @@
-meshtastic>=2.3.0
-pypubsub>=4.0.3
-pyserial>=3.5
+# ── Runtime requirements — Meshtastic Terminal UI ─────────────────────────
+# Python >= 3.9  (meshtastic constraint; tested on 3.11 / Pi OS Bookworm)
+
+# Meshtastic serial client — USB connection to Heltec LoRa V3
+# Latest stable: 2.7.8  (2026-03)
+meshtastic>=2.5.0,<3.0.0
+
+# PubSub event bus — used by meshtastic internally; pinned to avoid
+# breaking change in a future major (meshtastic itself pins <5.0.0)
+PyPubSub>=4.0.3,<5.0.0
+
+# Serial port access — meshtastic pins <4.0; no newer stable exists
+pyserial>=3.5,<4.0
+
+# Protocol Buffers — meshtastic uses proto3; pulled in transitively
+# but listed here so pip can resolve faster and errors are clearer
+protobuf>=4.21.12,<6.0.0
+
+# HTTP — meshtastic uses it for firmware update checks
+requests>=2.31.0,<3.0.0
+
+# YAML — meshtastic config serialisation
+PyYAML>=6.0.1,<7.0.0
+
+# ── Optional: Bluetooth (pulled in by meshtastic even for USB-only use) ──
+# bleak is a meshtastic hard dependency; it requires a D-Bus daemon on Linux.
+# On Pi OS it is available via apt: sudo apt-get install -y python3-dbus
+# bleak>=0.22.3  # installed automatically with meshtastic
