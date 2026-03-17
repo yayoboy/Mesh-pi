@@ -3,18 +3,20 @@
 main.py — Meshtastic Terminal UI entry point.
 
 Initialises:
-  1. Settings        (config/settings.json)
-  2. Radio client    (MeshtasticClient)
-  3. Hardware manager (GPIOManager — optional peripherals)
-  4. Tkinter root window
-  5. Screen manager  (stacked frames, single navigator)
-  6. Main loop
+  1. Settings         (config/settings.json)
+  2. Radio client     (MeshtasticClient)
+  3. Hardware manager (GPIOManager — GPIO peripherals)
+  4. I2C manager      (I2CManager — I2C telemetry sensors)
+  5. Tkinter root window
+  6. Screen manager   (stacked frames, single navigator)
+  7. Main loop
 
 Thread model:
   Thread-1  meshtastic-reader   → serial I/O, fires callbacks
   Thread-2  demo-loop (no HW)   → generates demo traffic
   Thread-3  gps-reader          → NMEA serial, fires callbacks
   Thread-4  buzzer-worker       → fire-and-forget tone patterns
+  Thread-5  i2c-poll            → I2C sensor polling
   Main      Tkinter + .after()  → all GUI updates
 
 All cross-thread GUI updates go through widget.after(0, fn).
@@ -32,6 +34,7 @@ sys.path.insert(0, ROOT)
 
 from radio.meshtastic_client import MeshtasticClient
 from hardware.gpio_manager import GPIOManager
+from hardware.i2c_manager import I2CManager
 from ui.home_screen import HomeScreen
 from ui.chat_screen import ChatScreen
 from ui.nodes_screen import NodesScreen
@@ -82,11 +85,12 @@ class App(tk.Tk):
     }
 
     def __init__(self, cfg: dict, client: MeshtasticClient,
-                 hw: GPIOManager):
+                 hw: GPIOManager, i2c: I2CManager):
         super().__init__()
         self.cfg = cfg
         self.client = client
         self.hw = hw
+        self.i2c = i2c
 
         self._configure_window()
         self._build_screens()
@@ -138,8 +142,12 @@ class App(tk.Tk):
         for screen in self._screens.values():
             screen.keyboard = self._keyboard
 
-        # Inject hardware manager into settings screen
-        self._screens["settings"]._hw_manager = self.hw
+        # Inject hardware and I2C managers into settings screen
+        self._screens["settings"]._hw_manager  = self.hw
+        self._screens["settings"]._i2c_manager = self.i2c
+
+        # Inject I2C manager into home screen for the sensor strip
+        self._screens["home"]._i2c_manager = self.i2c
 
         self._current: str = ""
 
@@ -222,6 +230,7 @@ class App(tk.Tk):
     def _on_quit(self):
         logger.info("shutting down")
         self.hw.stop()
+        self.i2c.stop()
         self.client.stop()
         self.destroy()
 
@@ -240,7 +249,10 @@ def main():
     hw = GPIOManager(cfg)
     hw.start()
 
-    app = App(cfg, client, hw)
+    i2c = I2CManager(cfg)
+    i2c.start()
+
+    app = App(cfg, client, hw, i2c)
 
     try:
         app.mainloop()
@@ -248,6 +260,7 @@ def main():
         pass
     finally:
         hw.stop()
+        i2c.stop()
         client.stop()
 
 

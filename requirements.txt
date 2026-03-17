@@ -35,6 +35,19 @@ gpiozero>=2.0,<3.0
 # NMEA 0183 sentence parser (GPS serial module)
 pynmea2>=1.19.0,<2.0.0
 
+# ── Optional I2C telemetry sensors ────────────────────────────────────────
+# Low-level I2C bus access — used by SHT30 driver and as a backend for
+# RPi.bme280. Also pulled in transitively by pi-ina219.
+smbus2>=0.4.2,<1.0.0
+
+# INA219 / INA226 voltage, current and power monitor
+# Handles sensor calibration registers and fixed-point arithmetic.
+pi-ina219>=1.4.1,<2.0.0
+
+# BME280 temperature + humidity + pressure sensor
+# Thin wrapper around smbus2 that handles the BME280 compensation formulas.
+RPi.bme280>=0.2.4,<1.0.0
+
 # ── Notes ─────────────────────────────────────────────────────────────────
 # tkinter must be installed as a system package, NOT via pip:
 #   sudo apt-get install -y python3-tk
@@ -45,3 +58,10 @@ pynmea2>=1.19.0,<2.0.0
 #
 # gpiozero on Pi OS Bookworm uses lgpio as its default pin factory:
 #   sudo apt-get install -y python3-lgpio
+#
+# I2C must be enabled on the Raspberry Pi:
+#   sudo raspi-config → Interface Options → I2C → Enable
+# or add "dtparam=i2c_arm=on" to /boot/firmware/config.txt and reboot.
+#
+# Verify I2C devices with: i2cdetect -y 1
+#   sudo apt-get install -y i2c-tools

@@ -46,13 +46,17 @@ sudo apt-get install -y \
     libdbus-1-dev \
     python3-lgpio \
     python3-gpiozero \
-    python3-serial
+    python3-serial \
+    i2c-tools \
+    python3-smbus2
 # python3-tk       — Tkinter (must be system package, not pip)
 # libglib2.0-dev / python3-dbus — needed by bleak (BLE, pulled in by meshtastic)
 # dbus             — D-Bus daemon required by bleak on Linux
 # python3-lgpio    — lgpio pin factory backend for gpiozero (Pi OS Bookworm default)
 # python3-gpiozero — exposes RotaryEncoder, Button, TonalBuzzer etc.
 # python3-serial   — system pyserial (also installed by pip, but good to have system pkg)
+# i2c-tools        — i2cdetect / i2cget for debugging I2C bus
+# python3-smbus2   — system smbus2 (venv pip install also covers this)
 
 # ── 3. Virtual environment ─────────────────────────────────────────────────
 info "Creating virtual environment at $VENV_DIR …"
@@ -77,8 +81,24 @@ info "Granting serial port access (dialout group)…"
 sudo usermod -aG dialout "${SUDO_USER:-pi}"
 warn "Serial group change takes effect on next login / reboot"
 
-# ── 6. Systemd service ─────────────────────────────────────────────────────
+# ── 6. Enable I2C interface ────────────────────────────────────────────────
+info "Abilitazione I2C (sensori telemetria)…"
+CONFIG_TXT="/boot/firmware/config.txt"
+[ -f "$CONFIG_TXT" ] || CONFIG_TXT="/boot/config.txt"   # fallback (older Pi OS)
+if grep -q "^dtparam=i2c_arm=on" "$CONFIG_TXT" 2>/dev/null; then
+    info "I2C già abilitato in $CONFIG_TXT"
+else
+    echo "dtparam=i2c_arm=on" | sudo tee -a "$CONFIG_TXT" > /dev/null
+    info "I2C abilitato in $CONFIG_TXT (richiede reboot)"
+fi
+# Ensure i2c-dev module loads at boot
+if ! grep -q "^i2c-dev" /etc/modules 2>/dev/null; then
+    echo "i2c-dev" | sudo tee -a /etc/modules > /dev/null
+fi
+
+# ── 7. Systemd service ─────────────────────────────────────────────────────
 info "Installing systemd service…"
+# (was step 6, now step 7 after I2C enable)
 
 # Patch the service file with the actual venv Python path and install dir
 SERVICE_TMP=$(mktemp)

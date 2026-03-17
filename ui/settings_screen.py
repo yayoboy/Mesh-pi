@@ -1,20 +1,21 @@
 """
 Settings screen — hardware peripheral configuration.
 
-Four internal tabs:
+Five internal tabs:
   ENCODER  →  rotary encoder GPIO + actions
   PULSANTI →  configurable push buttons
   BUZZER   →  buzzer GPIO + notification events
   GPS      →  serial GPS + fix status
+  I2C      →  I2C telemetry sensors (INA219, BME280, SHT30)
 
 All changes are saved to config/settings.json on tap of "SALVA".
-The hardware manager is restarted hot after saving.
+The hardware and I2C managers are restarted hot after saving.
 
 Layout (480×320):
   ┌─────────────────────────────────────────────┐
   │  ⚙ IMPOSTAZIONI HARDWARE        [SALVA]     │
   ├─────────────────────────────────────────────┤
-  │  [ENCODER]  [PULSANTI]  [BUZZER]  [GPS]     │  ← tab bar
+  │  [ENC] [PULS] [BUZ] [GPS] [I2C]            │  ← tab bar
   ├─────────────────────────────────────────────┤
   │  (scrollable content for active tab)        │
   ├─────────────────────────────────────────────┤
@@ -42,10 +43,11 @@ class SettingsScreen(BaseScreen):
 
     def build(self):
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(1, weight=1)
+        self.rowconfigure(2, weight=1)
 
-        self._hw_manager = None   # injected by App
-        self._active_tab = tk.StringVar(value="encoder")
+        self._hw_manager  = None   # injected by App
+        self._i2c_manager = None   # injected by App
+        self._active_tab  = tk.StringVar(value="encoder")
         self._saved_label_after: Optional[str] = None
 
         self._build_topbar()
@@ -86,8 +88,9 @@ class SettingsScreen(BaseScreen):
         bar = tk.Frame(self, bg=self.card)
         bar.grid(row=1, column=0, sticky="ew")
 
-        tabs = [("ENCODER", "encoder"), ("PULSANTI", "buttons"),
-                ("BUZZER",  "buzzer"),  ("GPS",      "gps")]
+        tabs = [("ENC",  "encoder"), ("PULS", "buttons"),
+                ("BUZ",  "buzzer"),  ("GPS",  "gps"),
+                ("I2C",  "i2c")]
 
         self._tab_btns: dict[str, tk.Button] = {}
         for label, key in tabs:
@@ -172,6 +175,8 @@ class SettingsScreen(BaseScreen):
             self._render_buzzer(hw.get("buzzer", {}))
         elif key == "gps":
             self._render_gps(hw.get("gps", {}))
+        elif key == "i2c":
+            self._render_i2c(self.cfg.get("i2c", {}))
 
     # ── Encoder ──────────────────────────────────────────────────────────
 
@@ -329,6 +334,98 @@ class SettingsScreen(BaseScreen):
                         0, self._update_gps_labels, f))
             else:
                 self._row_status(c, "○ Non attivo", self.dim)
+
+    # ── I2C sensors ───────────────────────────────────────────────────────
+
+    def _render_i2c(self, i2c: dict):
+        # Global bus settings card
+        hdr = self.card(self._inner)
+        hdr.pack(fill="x", padx=8, pady=8)
+        self._row_title(hdr, "Bus I2C")
+        self._i2c_bus      = self._row_entry(hdr, "Bus numero", str(i2c.get("bus", 1)))
+        self._i2c_interval = self._row_entry(hdr, "Intervallo (ms)",
+                                             str(i2c.get("poll_interval_ms", 2000)))
+
+        # One card per sensor
+        self._i2c_rows: list[dict] = []
+        for i, sensor_cfg in enumerate(i2c.get("sensors", [])):
+            self._render_i2c_sensor_card(sensor_cfg, i)
+
+        # "Add sensor" buttons
+        add_frame = tk.Frame(self._inner, bg=self.bg)
+        add_frame.pack(fill="x", padx=8, pady=4)
+        for stype, label_text in [("ina219", "+ INA219"),
+                                   ("bme280", "+ BME280"),
+                                   ("sht30",  "+ SHT30")]:
+            tk.Button(
+                add_frame, text=label_text,
+                font=self.f_small, fg=self.accent,
+                bg=self.card, activeforeground=self.bg,
+                activebackground=self.accent,
+                relief="flat", bd=0, padx=10, pady=5,
+                command=lambda t=stype: self._add_i2c_sensor(t),
+            ).pack(side="left", padx=(0, 6))
+
+        # Live readings (if I2C manager available)
+        if self._i2c_manager and self._i2c_manager.has_sensors():
+            self._render_i2c_live()
+
+    def _render_i2c_sensor_card(self, sensor_cfg: dict, idx: int):
+        stype = sensor_cfg.get("type", "sensor").upper()
+        c = self.card(self._inner)
+        c.pack(fill="x", padx=8, pady=(0, 4))
+
+        self._row_title(c, f"{stype}  —  {sensor_cfg.get('label', '')}")
+        row: dict = {"idx": idx}
+        row["enabled"] = self._row_toggle(c, "Abilitato",
+                                          sensor_cfg.get("enabled", False))
+        row["label"]   = self._row_entry(c, "Etichetta",
+                                         sensor_cfg.get("label", stype))
+        row["address"] = self._row_entry(c, "Indirizzo I2C",
+                                         sensor_cfg.get("address", "0x40"))
+
+        if sensor_cfg.get("type", "") == "ina219":
+            row["shunt_ohms"]       = self._row_entry(
+                c, "Shunt (Ω)", str(sensor_cfg.get("shunt_ohms", 0.1)))
+            row["max_expected_amps"] = self._row_entry(
+                c, "Max corrente (A)", str(sensor_cfg.get("max_expected_amps", 2.0)))
+        else:
+            row["shunt_ohms"] = None
+            row["max_expected_amps"] = None
+
+        row["type"] = sensor_cfg.get("type", "")
+        self._i2c_rows.append(row)
+
+    def _render_i2c_live(self):
+        live = self.card(self._inner)
+        live.pack(fill="x", padx=8, pady=(4, 8))
+        self._row_title(live, "Letture live")
+
+        for r in self._i2c_manager.get_power_readings():
+            tk.Label(live, text=f"⚡ {r.label}: {r.format_compact()}",
+                     font=self.f_mono, fg=self.online,
+                     bg=self.card, anchor="w"
+                     ).pack(fill="x", padx=12, pady=1)
+
+        for r in self._i2c_manager.get_env_readings():
+            tk.Label(live, text=f"🌡 {r.label}: {r.format_compact()}",
+                     font=self.f_mono, fg=self.accent,
+                     bg=self.card, anchor="w"
+                     ).pack(fill="x", padx=12, pady=1)
+
+    def _add_i2c_sensor(self, stype: str):
+        defaults = {
+            "ina219": {"type": "ina219", "enabled": False, "address": "0x40",
+                       "label": "INA219", "shunt_ohms": 0.1,
+                       "max_expected_amps": 2.0},
+            "bme280": {"type": "bme280", "enabled": False, "address": "0x76",
+                       "label": "BME280"},
+            "sht30":  {"type": "sht30",  "enabled": False, "address": "0x44",
+                       "label": "SHT30"},
+        }
+        self.cfg.setdefault("i2c", {}).setdefault("sensors", []).append(
+            defaults[stype])
+        self._render_tab("i2c")
 
     def _update_gps_labels(self, fix):
         if not fix.has_fix:
@@ -497,6 +594,27 @@ class SettingsScreen(BaseScreen):
                     "update_mesh_position":   self._gps_mesh.get(),
                 }
 
+            elif active == "i2c" and hasattr(self, "_i2c_bus"):
+                i2c = self.cfg.setdefault("i2c", {})
+                i2c["bus"]             = int(self._i2c_bus.get() or 1)
+                i2c["poll_interval_ms"] = int(self._i2c_interval.get() or 2000)
+
+                sensors = i2c.get("sensors", [])
+                for row in self._i2c_rows:
+                    idx = row["idx"]
+                    if idx >= len(sensors):
+                        continue
+                    sensors[idx]["enabled"] = row["enabled"].get()
+                    sensors[idx]["label"]   = row["label"].get().strip()
+                    sensors[idx]["address"] = row["address"].get().strip()
+                    if row["shunt_ohms"] is not None:
+                        sensors[idx]["shunt_ohms"] = float(
+                            row["shunt_ohms"].get() or 0.1)
+                    if row["max_expected_amps"] is not None:
+                        sensors[idx]["max_expected_amps"] = float(
+                            row["max_expected_amps"].get() or 2.0)
+                i2c["sensors"] = sensors
+
         except ValueError as exc:
             self._show_saved(f"Errore: {exc}")
             return
@@ -505,10 +623,13 @@ class SettingsScreen(BaseScreen):
         with open(_SETTINGS_PATH, "w", encoding="utf-8") as f:
             json.dump(self.cfg, f, indent=4, ensure_ascii=False)
 
-        # Hot-restart hardware
+        # Hot-restart hardware and I2C managers
         if self._hw_manager:
             self._hw_manager.cfg = self.cfg
             self._hw_manager.restart()
+        if self._i2c_manager:
+            self._i2c_manager.cfg = self.cfg
+            self._i2c_manager.restart()
 
         self._show_saved("✓ Salvato")
         self._render_tab(active)

@@ -78,5 +78,32 @@
             "baud": 9600,
             "update_mesh_position": false
         }
+    },
+
+    "i2c": {
+        "bus": 1,
+        "poll_interval_ms": 2000,
+        "sensors": [
+            {
+                "type": "ina219",
+                "enabled": false,
+                "address": "0x40",
+                "label": "Batteria",
+                "shunt_ohms": 0.1,
+                "max_expected_amps": 2.0
+            },
+            {
+                "type": "bme280",
+                "enabled": false,
+                "address": "0x76",
+                "label": "Meteo"
+            },
+            {
+                "type": "sht30",
+                "enabled": false,
+                "address": "0x44",
+                "label": "Temp/Umidità"
+            }
+        ]
     }
 }

@@ -30,14 +30,16 @@ class HomeScreen(BaseScreen):
 
     def build(self):
         self._start_time = time.time()
+        self._i2c_manager = None   # injected by App
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(2, weight=1)
+        self.rowconfigure(3, weight=1)   # events row (shifted down by 1)
 
         self._build_topbar()
         self._build_status_card()
+        self._build_sensor_strip()
         self._build_events()
         nav = self.nav_bar(self, "home")
-        nav.grid(row=3, column=0, sticky="ew")
+        nav.grid(row=4, column=0, sticky="ew")
 
         self.client.on_status_change(self._on_status)
         self.client.on_message(self._on_message)
@@ -135,12 +137,43 @@ class HomeScreen(BaseScreen):
         return f
 
     # ------------------------------------------------------------------ #
+    # Sensor telemetry strip (I2C sensors)                                #
+    # ------------------------------------------------------------------ #
+
+    def _build_sensor_strip(self):
+        """Compact one-line strip showing I2C sensor readings.
+
+        Hidden until at least one sensor has data; consumes only a few pixels
+        of vertical space so the events log is not significantly compressed.
+        """
+        self._sensor_strip = tk.Frame(self, bg=self.bg)
+        # row=2; initially ungridded (shown only when data arrives)
+        self._sensor_strip.columnconfigure(0, weight=1)
+
+        self._lbl_power = tk.Label(
+            self._sensor_strip, text="", font=self.f_small,
+            fg=self.online, bg=self.bg, anchor="w")
+        self._lbl_power.grid(row=0, column=0, sticky="w", padx=8)
+
+        self._lbl_env = tk.Label(
+            self._sensor_strip, text="", font=self.f_small,
+            fg=self.accent, bg=self.bg, anchor="w")
+        self._lbl_env.grid(row=1, column=0, sticky="w", padx=8)
+
+        self._sensor_strip_visible = False
+
+    def _show_sensor_strip(self):
+        if not self._sensor_strip_visible:
+            self._sensor_strip.grid(row=2, column=0, sticky="ew", pady=(0, 2))
+            self._sensor_strip_visible = True
+
+    # ------------------------------------------------------------------ #
     # Events log                                                           #
     # ------------------------------------------------------------------ #
 
     def _build_events(self):
         outer = tk.Frame(self, bg=self.bg)
-        outer.grid(row=2, column=0, sticky="nsew", padx=8, pady=(0, 4))
+        outer.grid(row=3, column=0, sticky="nsew", padx=8, pady=(0, 4))
         outer.columnconfigure(0, weight=1)
         outer.rowconfigure(1, weight=1)
 
@@ -224,3 +257,20 @@ class HomeScreen(BaseScreen):
         # Metric chips
         self._chip_tx._lbl.config(text=f"↑ TX  {s.tx_packets} pkt")
         self._chip_rx._lbl.config(text=f"↓ RX  {s.rx_packets} pkt")
+
+        # I2C sensor strip
+        if self._i2c_manager:
+            power = self._i2c_manager.get_power_readings()
+            env   = self._i2c_manager.get_env_readings()
+            if power or env:
+                self._show_sensor_strip()
+                if power:
+                    parts = [f"⚡ {r.label}: {r.format_compact()}" for r in power]
+                    self._lbl_power.config(text="  |  ".join(parts))
+                else:
+                    self._lbl_power.config(text="")
+                if env:
+                    parts = [f"🌡 {r.label}: {r.format_compact()}" for r in env]
+                    self._lbl_env.config(text="  |  ".join(parts))
+                else:
+                    self._lbl_env.config(text="")
