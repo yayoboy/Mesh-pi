@@ -36,15 +36,17 @@ class NodesScreen(BaseScreen):
 
     def build(self):
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(1, weight=1)
+        self.rowconfigure(2, weight=1)
 
         self._color_map: dict[str, str] = {}
         self._color_idx = 0
+        self._sort_key = "snr"   # default sort
 
         self._build_topbar()
+        self._build_sort_bar()
         self._build_list()
         nav = self.nav_bar(self, "nodes")
-        nav.grid(row=2, column=0, sticky="ew")
+        nav.grid(row=3, column=0, sticky="ew")
 
         self.client.on_node_update(self._on_node_update)
 
@@ -72,12 +74,38 @@ class NodesScreen(BaseScreen):
                   ).pack(side="right", padx=4)
 
     # ------------------------------------------------------------------ #
+    # Sort bar                                                             #
+    # ------------------------------------------------------------------ #
+
+    def _build_sort_bar(self):
+        bar = tk.Frame(self, bg=self.bg)
+        bar.grid(row=1, column=0, sticky="ew", padx=8, pady=2)
+        tk.Label(bar, text="Ordina:", bg=self.bg,
+                 fg="#888888", font=self.f_small).pack(side="left")
+        self._sort_buttons: dict[str, tk.Button] = {}
+        for label, key in [("Segnale", "rssi"), ("Recente", "last_heard"),
+                           ("Nome", "name")]:
+            btn = tk.Button(bar, text=label,
+                            command=lambda k=key: self._set_sort(k),
+                            bg=self.card, fg=self.fg,
+                            font=self.f_small, relief="flat", padx=6)
+            btn.pack(side="left", padx=2)
+            self._sort_buttons[key] = btn
+
+    def _set_sort(self, key: str):
+        self._sort_key = key
+        # Highlight active sort button
+        for k, btn in self._sort_buttons.items():
+            btn.config(fg=self.accent if k == key else self.fg)
+        self._refresh_nodes()
+
+    # ------------------------------------------------------------------ #
     # Scrollable node list                                                 #
     # ------------------------------------------------------------------ #
 
     def _build_list(self):
         container = tk.Frame(self, bg=self.bg)
-        container.grid(row=1, column=0, sticky="nsew")
+        container.grid(row=2, column=0, sticky="nsew")
         container.columnconfigure(0, weight=1)
         container.rowconfigure(0, weight=1)
 
@@ -116,6 +144,20 @@ class NodesScreen(BaseScreen):
     def _on_node_update(self, _node):
         self._inner.after(0, self._refresh_nodes)
 
+    def _sort_nodes(self, nodes):
+        """Sort nodes by current sort key."""
+        if self._sort_key == "rssi":
+            return sorted(nodes, key=lambda n: (n.rssi if n.rssi != 0
+                                                 else n.snr), reverse=True)
+        elif self._sort_key == "last_heard":
+            return sorted(nodes,
+                          key=lambda n: getattr(n, "seconds_since_heard", 9999))
+        elif self._sort_key == "name":
+            return sorted(nodes,
+                          key=lambda n: (n.display_name or "").lower())
+        # default: SNR
+        return sorted(nodes, key=lambda n: n.snr, reverse=True)
+
     def _refresh_nodes(self):
         nodes = self.client.get_nodes()
         seen = {n.node_id for n in nodes}
@@ -125,10 +167,15 @@ class NodesScreen(BaseScreen):
             if nid not in seen:
                 self._node_cards.pop(nid).destroy()
 
-        # Sort by SNR (always available from node db); fall back to rssi
-        for node in sorted(nodes, key=lambda n: n.snr, reverse=True):
+        # Unpack and re-pack in new sort order
+        for card in self._node_cards.values():
+            card.pack_forget()
+
+        for node in self._sort_nodes(nodes):
             if node.node_id in self._node_cards:
-                self._update_card(self._node_cards[node.node_id], node)
+                card = self._node_cards[node.node_id]
+                self._update_card(card, node)
+                card.pack(fill="x", padx=8, pady=4)
             else:
                 card = self._create_card(node)
                 card.pack(fill="x", padx=8, pady=4)
@@ -200,6 +247,7 @@ class NodesScreen(BaseScreen):
         frame._node = node
         self._update_card(frame, node)
         self._schedule_age(frame)
+        self._bind_card_tap(frame, node.node_id)
         return frame
 
     def _update_card(self, frame, node):
@@ -243,3 +291,85 @@ class NodesScreen(BaseScreen):
             frame._age.config(text=s)
             frame.after(5000, _tick)
         _tick()
+
+    def _bind_card_tap(self, card, node_id: str):
+        """Bind tap/click on a card to open the detail overlay."""
+        def _on_tap(_event):
+            self._on_node_tap(node_id)
+        card.bind("<Button-1>", _on_tap)
+        for child in card.winfo_children():
+            child.bind("<Button-1>", _on_tap)
+            for grandchild in child.winfo_children():
+                grandchild.bind("<Button-1>", _on_tap)
+
+    # ------------------------------------------------------------------ #
+    # Node detail overlay                                                  #
+    # ------------------------------------------------------------------ #
+
+    def _format_time(self, ts) -> str:
+        """Format a timestamp or seconds-since value for display."""
+        import datetime
+        if isinstance(ts, (int, float)):
+            dt = datetime.datetime.fromtimestamp(ts)
+            return dt.strftime("%H:%M:%S  %d/%m")
+        if hasattr(ts, "strftime"):
+            return ts.strftime("%H:%M:%S  %d/%m")
+        return str(ts)
+
+    def _on_node_tap(self, node_id: str):
+        """Show a detail overlay for the tapped node."""
+        card = self._node_cards.get(node_id)
+        if card is None:
+            return
+        node = card._node
+
+        # Overlay semitrasparente sull'intera schermata
+        overlay = tk.Frame(self, bg="#000000")
+        overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+
+        # Panel centrato
+        panel = tk.Frame(overlay, bg=self.card, padx=12, pady=12)
+        panel.place(relx=0.05, rely=0.08, relwidth=0.9, relheight=0.84)
+
+        tk.Label(panel, text=node.display_name or node.node_id,
+                 bg=self.card, fg=self.fg,
+                 font=self.f_large).pack(anchor="w", pady=(0, 4))
+
+        # Signal info
+        if node.rssi != 0:
+            sig_text = f"RSSI: {node.rssi} dBm    SNR: {node.snr:+.1f} dB"
+        else:
+            sig_text = f"SNR: {node.snr:+.1f} dB"
+
+        details = [
+            sig_text,
+            f"Hop: {node.hops}    ID: {node.node_id}",
+        ]
+        if hasattr(node, "seconds_since_heard") and node.seconds_since_heard >= 0:
+            sec = int(node.seconds_since_heard)
+            if sec < 60:
+                age = f"{sec}s fa"
+            elif sec < 3600:
+                age = f"{sec // 60}m fa"
+            else:
+                age = f"{sec // 3600}h fa"
+            details.append(f"Ultimo contatto: {age}")
+        if hasattr(node, "last_heard") and node.last_heard:
+            details.append(f"Timestamp: {self._format_time(node.last_heard)}")
+        if hasattr(node, "latitude") and node.latitude:
+            details.append(f"GPS: {node.latitude:.5f}, {node.longitude:.5f}")
+        if hasattr(node, "battery_level") and node.battery_level >= 0:
+            details.append(f"Batteria: {node.battery_level}%")
+        if hasattr(node, "short_name") and node.short_name:
+            details.append(f"Nome breve: {node.short_name}")
+
+        for d in details:
+            tk.Label(panel, text=d, bg=self.card, fg="#cccccc",
+                     font=self.f_small).pack(anchor="w", pady=1)
+
+        tk.Button(panel, text="✕  Chiudi",
+                  command=overlay.destroy,
+                  bg=self.bg, fg=self.fg,
+                  activeforeground=self.accent, activebackground=self.bg,
+                  font=self.f_bold,
+                  relief="flat", pady=6).pack(side="bottom", pady=(8, 0))

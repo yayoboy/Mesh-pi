@@ -120,6 +120,8 @@ class App(tk.Tk):
         self.telemetry_store = TelemetryStore()
         self.telemetry_store.load()
 
+        self._unread_messages = 0
+
         self._configure_window()
         self._build_screens()
         self._wire_hardware()
@@ -196,6 +198,7 @@ class App(tk.Tk):
         screen.tkraise()
         screen.on_enter()
         self._current = name
+        self._on_screen_shown(name)
         logger.debug("navigated → %s", name)
 
     # ------------------------------------------------------------------ #
@@ -212,6 +215,33 @@ class App(tk.Tk):
             lambda msg: self.hw.buzz("new_message"))
         self.client.on_node_update(
             lambda node: self.hw.buzz("node_online"))
+
+        # Unread message badge tracking
+        self.client.on_message(self._on_new_message)
+
+    # ------------------------------------------------------------------ #
+    # Unread message badges                                                #
+    # ------------------------------------------------------------------ #
+
+    def _on_new_message(self, msg):
+        """Increment unread badge when a message arrives while not on chat."""
+        def _update():
+            if self._current != "chat":
+                self._unread_messages += 1
+                self._update_all_badges()
+        self.after(0, _update)
+
+    def _update_all_badges(self):
+        badges = {"chat": self._unread_messages}
+        for screen in self._screens.values():
+            if hasattr(screen, "update_nav_badges"):
+                screen.update_nav_badges(badges)
+
+    def _on_screen_shown(self, name):
+        """Reset unread count when user navigates to chat."""
+        if name == "chat":
+            self._unread_messages = 0
+            self._update_all_badges()
 
     def dispatch_action(self, action: str):
         """Dispatch a hardware action to the main Tkinter thread."""

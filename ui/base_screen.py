@@ -177,10 +177,26 @@ class BaseScreen(tk.Frame):
                 # Underline indicator
                 btn.configure(underline=0)
             btn.pack(side="left", expand=True, fill="x")
+            # Keep a reference to the chat button for badge updates
+            if name == "chat":
+                self._nav_chat_btn = btn
+                self._nav_chat_default = label
         # top border line
         tk.Frame(bar, bg=self.cfg["accent_dark_color"], height=1).place(
             relx=0, rely=0, relwidth=1)
         return bar
+
+    def update_nav_badges(self, badges: dict):
+        """Update badge counts on nav bar buttons (e.g. unread chat count)."""
+        btn = getattr(self, "_nav_chat_btn", None)
+        if btn is None:
+            return
+        count = badges.get("chat", 0)
+        if count > 0:
+            btn.config(text=f"{ICON_CHAT} {count}")
+        else:
+            btn.config(text=getattr(self, "_nav_chat_default",
+                                    f"{ICON_CHAT} CHAT"))
 
     # ------------------------------------------------------------------ #
     # Touch keyboard binding                                               #
