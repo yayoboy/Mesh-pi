@@ -26,6 +26,12 @@ except ImportError:
     MESHTASTIC_AVAILABLE = False
     logger.warning("meshtastic library not found — running in demo mode")
 
+    # Provide a stub so default parameter values don't raise NameError
+    class _PubStub:
+        AUTO_TOPIC = None
+        def subscribe(self, *a, **kw): pass
+    pub = _PubStub()
+
 
 class Message:
     """Immutable value object for a received or sent message."""
@@ -84,6 +90,22 @@ class RadioStats:
         self.tx_packets: int = 0
 
 
+class ReconnectPolicy:
+    """Backoff esponenziale per tentativi di riconnessione."""
+    def __init__(self, base: int = 1, max_delay: int = 30):
+        self._base    = base
+        self._max     = max_delay
+        self.attempts = 0
+
+    def next_delay(self) -> int:
+        delay = min(self._base * (2 ** self.attempts), self._max)
+        self.attempts += 1
+        return delay
+
+    def reset(self):
+        self.attempts = 0
+
+
 class MeshtasticClient:
     """
     Thread-safe wrapper around the Meshtastic Python library.
@@ -108,7 +130,9 @@ class MeshtasticClient:
         self._lock = threading.Lock()
         self._interface = None
         self._running = False
+        self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
+        self._reconnect_policy = ReconnectPolicy()
 
         self._message_callbacks: list[Callable[[Message], None]] = []
         self._node_callbacks: list[Callable[[NodeInfo], None]] = []
@@ -141,12 +165,14 @@ class MeshtasticClient:
         if not MESHTASTIC_AVAILABLE:
             return  # demo mode already running
         self._running = True
+        self._stop_event.clear()
         self._thread = threading.Thread(target=self._connection_loop,
                                         name="meshtastic-reader", daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
         self._running = False
+        self._stop_event.set()
         self._disconnect()
 
     def send(self, text: str) -> bool:
@@ -184,14 +210,20 @@ class MeshtasticClient:
         while self._running:
             try:
                 self._connect()
+                # Connection succeeded — reset backoff
+                self._reconnect_policy.reset()
                 # Block until disconnected
                 while self._running and self._interface is not None:
-                    time.sleep(1)
+                    if self._stop_event.wait(1):
+                        return
             except Exception as exc:
                 logger.error("connection error: %s", exc)
                 self._set_connected(False)
                 if self._running:
-                    time.sleep(self.RECONNECT_DELAY)
+                    delay = self._reconnect_policy.next_delay()
+                    self._notify_status(f"Riconnessione tra {delay}s…")
+                    if self._stop_event.wait(delay):
+                        return
 
     def _connect(self) -> None:
         logger.info("connecting to %s", self.port)
