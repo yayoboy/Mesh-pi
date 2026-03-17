@@ -90,6 +90,7 @@
                 "enabled": false,
                 "address": "0x40",
                 "label": "Batteria",
+                "role": "alimentazione",
                 "shunt_ohms": 0.1,
                 "max_expected_amps": 2.0
             },
@@ -97,13 +98,15 @@
                 "type": "bme280",
                 "enabled": false,
                 "address": "0x76",
-                "label": "Meteo"
+                "label": "Meteo",
+                "role": "ambiente"
             },
             {
                 "type": "sht30",
                 "enabled": false,
                 "address": "0x44",
-                "label": "Temp/Umidità"
+                "label": "Temp/Umidità",
+                "role": "interno"
             }
         ]
     }

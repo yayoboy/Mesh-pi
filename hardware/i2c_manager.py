@@ -48,6 +48,34 @@ from .status import HardwareStatus, StatusLevel
 
 logger = logging.getLogger(__name__)
 
+VALID_ROLES = ("interno", "esterno", "ambiente", "alimentazione", "custom")
+
+
+class SensorConfig:
+    """Configurazione di un singolo sensore I2C con label e ruolo personalizzabili."""
+
+    def __init__(self, cfg: dict):
+        self.type    = cfg["type"]
+        self.enabled = cfg.get("enabled", False)
+        raw_addr     = cfg.get("address", "0x00")
+        self.address = int(raw_addr, 16) if isinstance(raw_addr, str) else int(raw_addr)
+        self.label   = cfg.get("label") or self.type
+        role         = cfg.get("role", "custom")
+        self.role    = role if role in VALID_ROLES else "custom"
+        self.shunt_ohms        = float(cfg.get("shunt_ohms", 0.1))
+        self.max_expected_amps = float(cfg.get("max_expected_amps", 2.0))
+
+    def to_dict(self) -> dict:
+        return {
+            "type":    self.type,
+            "enabled": self.enabled,
+            "address": hex(self.address),
+            "label":   self.label,
+            "role":    self.role,
+            "shunt_ohms":        self.shunt_ohms,
+            "max_expected_amps": self.max_expected_amps,
+        }
+
 
 class I2CManager:
     """
@@ -60,6 +88,9 @@ class I2CManager:
 
     def __init__(self, cfg: dict):
         self.cfg = cfg
+
+        self._sensor_configs: list[SensorConfig] = []
+        self._sensors: list[SensorConfig] = []
 
         self._sensors_power: list[INA219Sensor] = []
         self._sensors_env: list[BME280Sensor | SHT30Sensor] = []
@@ -158,35 +189,32 @@ class I2CManager:
     def _init_sensors(self, i2c_cfg: dict) -> None:
         bus = int(i2c_cfg.get("bus", 1))
 
-        for sensor_cfg in i2c_cfg.get("sensors", []):
-            if not sensor_cfg.get("enabled", False):
-                continue
+        self._sensor_configs = [
+            SensorConfig(s) for s in i2c_cfg.get("sensors", [])
+        ]
+        self._sensors = [s for s in self._sensor_configs if s.enabled]
 
-            stype   = sensor_cfg.get("type", "").lower()
-            label   = sensor_cfg.get("label", stype.upper())
-            addr_s  = sensor_cfg.get("address", "0x40")
-            address = int(addr_s, 16) if isinstance(addr_s, str) else int(addr_s)
-
+        for sc in self._sensors:
+            stype = sc.type.lower()
             try:
                 if stype == "ina219":
                     s = INA219Sensor(
-                        label=label,
-                        address=address,
+                        label=sc.label,
+                        address=sc.address,
                         bus_num=bus,
-                        shunt_ohms=float(sensor_cfg.get("shunt_ohms", 0.1)),
-                        max_expected_amps=float(
-                            sensor_cfg.get("max_expected_amps", 2.0)),
+                        shunt_ohms=sc.shunt_ohms,
+                        max_expected_amps=sc.max_expected_amps,
                     )
                     if s.start():
                         self._sensors_power.append(s)
 
                 elif stype == "bme280":
-                    s = BME280Sensor(label=label, address=address, bus_num=bus)
+                    s = BME280Sensor(label=sc.label, address=sc.address, bus_num=bus)
                     if s.start():
                         self._sensors_env.append(s)
 
                 elif stype in ("sht30", "sht31"):
-                    s = SHT30Sensor(label=label, address=address, bus_num=bus)
+                    s = SHT30Sensor(label=sc.label, address=sc.address, bus_num=bus)
                     if s.start():
                         self._sensors_env.append(s)
 
@@ -194,7 +222,7 @@ class I2CManager:
                     logger.warning("I2C: tipo sensore sconosciuto '%s'", stype)
 
             except Exception as exc:
-                logger.error("I2C: init '%s' fallita: %s", label, exc)
+                logger.error("I2C: init '%s' fallita: %s", sc.label, exc)
 
     # ------------------------------------------------------------------ #
     # Polling loop (daemon thread)                                         #
