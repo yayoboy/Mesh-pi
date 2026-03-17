@@ -44,6 +44,7 @@ from .readings import EnvReading, PowerReading
 from .sensor_bme280 import BME280Sensor
 from .sensor_ina219 import INA219Sensor
 from .sensor_sht30 import SHT30Sensor
+from .status import HardwareStatus, StatusLevel
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,9 @@ class I2CManager:
         self._running = False
         self._poll_thread: Optional[threading.Thread] = None
 
+        self.status = HardwareStatus("i2c")
+        self.status.set_disabled("Nessun sensore configurato")
+
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
     # ------------------------------------------------------------------ #
@@ -87,7 +91,11 @@ class I2CManager:
 
         if not self._sensors_power and not self._sensors_env:
             logger.debug("I2C: nessun sensore attivo")
+            self.status.set_disabled("Nessun sensore configurato")
             return
+
+        n = len(self._sensors_power) + len(self._sensors_env)
+        self.status.set_ok(f"{n} sensore/i configurati")
 
         self._running = True
         self._poll_thread = threading.Thread(
@@ -197,39 +205,44 @@ class I2CManager:
         interval = i2c_cfg.get("poll_interval_ms", 2000) / 1000.0
 
         while self._running:
-            # ── Power sensors ─────────────────────────────────────────
-            if self._sensors_power:
-                new_power: list[PowerReading] = []
-                for s in self._sensors_power:
-                    r = s.read()
-                    if r:
-                        new_power.append(r)
+            try:
+                # ── Power sensors ─────────────────────────────────────────
+                if self._sensors_power:
+                    new_power: list[PowerReading] = []
+                    for s in self._sensors_power:
+                        r = s.read()
+                        if r:
+                            new_power.append(r)
 
-                if new_power:
-                    with self._lock:
-                        self._readings_power = new_power
-                    for cb in self._power_cbs:
-                        try:
-                            cb(list(new_power))
-                        except Exception as exc:
-                            logger.debug("power callback error: %s", exc)
+                    if new_power:
+                        with self._lock:
+                            self._readings_power = new_power
+                        for cb in self._power_cbs:
+                            try:
+                                cb(list(new_power))
+                            except Exception as exc:
+                                logger.debug("power callback error: %s", exc)
 
-            # ── Environmental sensors ─────────────────────────────────
-            if self._sensors_env:
-                new_env: list[EnvReading] = []
-                for s in self._sensors_env:
-                    r = s.read()
-                    if r:
-                        new_env.append(r)
+                # ── Environmental sensors ─────────────────────────────────
+                if self._sensors_env:
+                    new_env: list[EnvReading] = []
+                    for s in self._sensors_env:
+                        r = s.read()
+                        if r:
+                            new_env.append(r)
 
-                if new_env:
-                    with self._lock:
-                        self._readings_env = new_env
-                    for cb in self._env_cbs:
-                        try:
-                            cb(list(new_env))
-                        except Exception as exc:
-                            logger.debug("env callback error: %s", exc)
+                    if new_env:
+                        with self._lock:
+                            self._readings_env = new_env
+                        for cb in self._env_cbs:
+                            try:
+                                cb(list(new_env))
+                            except Exception as exc:
+                                logger.debug("env callback error: %s", exc)
+
+            except Exception as e:
+                logger.error("I2C: errore polling: %s", e)
+                self.status.set_error(str(e))
 
             # Sleep interruptibly in 100 ms slices
             remaining = interval
