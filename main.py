@@ -43,6 +43,7 @@ from ui.nodes_screen import NodesScreen
 from ui.debug_screen import DebugScreen
 from ui.settings import SettingsScreen
 from ui.keyboard import OnScreenKeyboard
+from data.telemetry_store import TelemetryStore, TelemetrySample
 
 # ── logging ────────────────────────────────────────────────────────────────
 _LOG_FORMAT  = "%(asctime)s  %(levelname)-7s  %(name)s  %(message)s"
@@ -115,12 +116,19 @@ class App(tk.Tk):
         self.hw = hw
         self.i2c = i2c
 
+        # Telemetry store (persistent history)
+        self.telemetry_store = TelemetryStore()
+        self.telemetry_store.load()
+
         self._configure_window()
         self._build_screens()
         self._wire_hardware()
         self.navigate("home")
 
         self.protocol("WM_DELETE_WINDOW", self._on_quit)
+
+        # Start periodic telemetry sampling (every 30s)
+        self.after(30000, self._sample_telemetry)
 
     # ------------------------------------------------------------------ #
     # Window setup                                                         #
@@ -171,6 +179,9 @@ class App(tk.Tk):
 
         # Inject I2C manager into home screen for the sensor strip
         self._screens["home"]._i2c_manager = self.i2c
+
+        # Inject telemetry store into debug screen for the telemetry tab
+        self._screens["debug"].set_telemetry_store(self.telemetry_store)
 
         self._current: str = ""
 
@@ -245,6 +256,38 @@ class App(tk.Tk):
             idx = _SCREEN_ORDER.index(self._current)
             new = _SCREEN_ORDER[(idx + delta) % len(_SCREEN_ORDER)]
             self.navigate(new)
+
+    # ------------------------------------------------------------------ #
+    # Telemetry sampling                                                   #
+    # ------------------------------------------------------------------ #
+
+    def _sample_telemetry(self):
+        """Sample radio stats + I2C sensors and store in telemetry history."""
+        sensors: dict[str, float] = {}
+
+        # I2C environmental sensors
+        for r in self.i2c.get_env_readings():
+            sensors[f"{r.label} (\u00b0C)"] = r.temperature
+            if r.humidity is not None:
+                sensors[f"{r.label} (%RH)"] = r.humidity
+            if r.pressure is not None:
+                sensors[f"{r.label} (hPa)"] = r.pressure
+
+        # I2C power sensors
+        for r in self.i2c.get_power_readings():
+            sensors[f"{r.label} (V)"] = r.bus_voltage
+            sensors[f"{r.label} (mA)"] = r.current_ma
+
+        sample = TelemetrySample(
+            rssi=self.client.stats.rssi,
+            snr=self.client.stats.snr,
+            sensors=sensors,
+        )
+        self.telemetry_store.add(sample)
+        self.telemetry_store.save()
+
+        # Reschedule
+        self.after(30000, self._sample_telemetry)
 
     # ------------------------------------------------------------------ #
     # Quit                                                                 #

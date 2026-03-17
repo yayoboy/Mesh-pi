@@ -5,17 +5,15 @@ Layout (480×320):
   ┌─────────────────────────────────────────────┐
   │  ≡ DEBUG RADIO                  ⚠2  ● OK   │  ← topbar (row 0)
   ├─────────────────────────────────────────────┤
-  │  RSSI   ██████████░░░  -85 dBm              │  ← meters (row 1)
-  │  SNR    ██████████████  7.5 dB              │
+  │  [📡 Radio] [📊 Telemetria]                  │  ← tab bar (row 1)
   ├─────────────────────────────────────────────┤
-  │  │HOP 1│ │RX 142│ │TX 37│ │CH 4%│  ▁▂▄▆▄  │  ← chips + mini-sparkline (row 2)
-  ├─────────────────────────────────────────────┤
-  │  REGISTRO APPLICAZIONE            [PULISCI] │  ← log viewer header (row 3)
+  │  RSSI   ██████████░░░  -85 dBm              │  ← content (row 2)
+  │  SNR    ██████████████  7.5 dB              │    Radio tab: meters, chips,
+  │  │HOP 1│ │RX 142│ │TX 37│ │CH 4%│  ▁▂▄▆▄  │    sparkline, log viewer
+  │  REGISTRO APPLICAZIONE            [PULISCI] │    Telemetry tab: sensor graphs
   │  10:23 I  main: Radio connesso              │
-  │  10:23 W  i2c_manager: BME280 non trovato   │  (expandable, scrollable)
-  │  10:24 E  gps_reader: timeout seriale       │
   ├─────────────────────────────────────────────┤
-  │  ⌂ HOME  ✉ CHAT  ◉ NODI  ≡ DEBUG  ⚙ CONFIG │  ← nav (row 4)
+  │  ⌂ HOME  ✉ CHAT  ◉ NODI  ≡ DEBUG  ⚙ CONFIG │  ← nav (row 3)
   └─────────────────────────────────────────────┘
 
 Colour coding in the log viewer:
@@ -32,6 +30,7 @@ from collections import deque
 from .base_screen import BaseScreen
 from .icons import DOT_ON, DOT_OFF
 from .log_buffer import ui_log_handler
+from data.telemetry_store import TelemetryStore
 
 
 _HISTORY_LEN = 60
@@ -43,18 +42,32 @@ class DebugScreen(BaseScreen):
 
     def build(self):
         self.columnconfigure(0, weight=1)
-        self.rowconfigure(3, weight=1)   # log viewer gets all extra vertical space
+        self.rowconfigure(2, weight=1)   # content area gets all extra vertical space
 
         self._rssi_history: deque[int] = deque(maxlen=_HISTORY_LEN)
         self._warn_count = 0             # unread warnings/errors
+        self._telemetry_store: TelemetryStore | None = None
 
-        self._build_topbar()
+        self._build_topbar()             # row 0
+        self._build_tab_bar()            # row 1
+
+        # ── Radio tab (default) ──────────────────────────────────────
+        self._radio_frame = tk.Frame(self, bg=self.bg)
+        self._radio_frame.grid(row=2, column=0, sticky="nsew")
+        self._radio_frame.columnconfigure(0, weight=1)
+        self._radio_frame.rowconfigure(2, weight=1)
+
         self._build_meters()
-        self._build_chips_spark()        # chips + mini sparkline on the same row
+        self._build_chips_spark()
         self._build_log_viewer()
-        nav = self.nav_bar(self, "debug")
-        nav.grid(row=4, column=0, sticky="ew")
 
+        # ── Telemetry tab (hidden until selected) ────────────────────
+        self._build_telemetry_tab()
+
+        nav = self.nav_bar(self, "debug")
+        nav.grid(row=3, column=0, sticky="ew")
+
+        self._show_tab("radio")
         self._poll()
 
     # ------------------------------------------------------------------ #
@@ -79,12 +92,50 @@ class DebugScreen(BaseScreen):
         self._lbl_warn.pack(side="right", padx=2)
 
     # ------------------------------------------------------------------ #
+    # Tab bar                                                              #
+    # ------------------------------------------------------------------ #
+
+    def _build_tab_bar(self):
+        bar = tk.Frame(self, bg=self.card, height=32)
+        bar.grid(row=1, column=0, sticky="ew")
+        self._tab_btns: dict[str, tk.Button] = {}
+        for label, key in [("\U0001f4e1 Radio", "radio"),
+                           ("\U0001f4ca Telemetria", "telemetry")]:
+            btn = tk.Button(bar, text=label,
+                            command=lambda k=key: self._show_tab(k),
+                            bg=self.card, fg=self.fg,
+                            activeforeground=self.fg,
+                            activebackground=self.card,
+                            relief="flat", padx=10, pady=4,
+                            font=self.f_small)
+            btn.pack(side="left")
+            self._tab_btns[key] = btn
+        self._active_tab = "radio"
+
+    def _show_tab(self, key: str):
+        self._active_tab = key
+        # Update button highlight
+        for k, btn in self._tab_btns.items():
+            if k == key:
+                btn.config(fg=self.accent)
+            else:
+                btn.config(fg=self.fg)
+        # Toggle frames
+        if key == "radio":
+            self._radio_frame.grid(row=2, column=0, sticky="nsew")
+            self._telemetry_frame.grid_remove()
+        else:
+            self._telemetry_frame.grid(row=2, column=0, sticky="nsew")
+            self._refresh_telemetry()
+            self._radio_frame.grid_remove()
+
+    # ------------------------------------------------------------------ #
     # Meter bars (RSSI + SNR)                                             #
     # ------------------------------------------------------------------ #
 
     def _build_meters(self):
-        outer = tk.Frame(self, bg=self.bg)
-        outer.grid(row=1, column=0, sticky="ew", padx=8, pady=(4, 2))
+        outer = tk.Frame(self._radio_frame, bg=self.bg)
+        outer.grid(row=0, column=0, sticky="ew", padx=8, pady=(4, 2))
         outer.columnconfigure(0, weight=1)
 
         c = self.card(outer)
@@ -128,8 +179,8 @@ class DebugScreen(BaseScreen):
     # ------------------------------------------------------------------ #
 
     def _build_chips_spark(self):
-        outer = tk.Frame(self, bg=self.bg)
-        outer.grid(row=2, column=0, sticky="ew", padx=8, pady=(0, 2))
+        outer = tk.Frame(self._radio_frame, bg=self.bg)
+        outer.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 2))
         outer.columnconfigure(0, weight=1)
         outer.columnconfigure(1, weight=0)
 
@@ -180,8 +231,8 @@ class DebugScreen(BaseScreen):
     # ------------------------------------------------------------------ #
 
     def _build_log_viewer(self):
-        frame = tk.Frame(self, bg=self.bg)
-        frame.grid(row=3, column=0, sticky="nsew", padx=8, pady=(0, 4))
+        frame = tk.Frame(self._radio_frame, bg=self.bg)
+        frame.grid(row=2, column=0, sticky="nsew", padx=8, pady=(0, 4))
         frame.columnconfigure(0, weight=1)
         frame.rowconfigure(1, weight=1)
 
@@ -283,6 +334,68 @@ class DebugScreen(BaseScreen):
         self._log_text.config(state="disabled")
         self._warn_count = 0
         self._lbl_warn.config(text="")
+
+    # ------------------------------------------------------------------ #
+    # Telemetry tab                                                        #
+    # ------------------------------------------------------------------ #
+
+    def _build_telemetry_tab(self):
+        self._telemetry_frame = tk.Frame(self, bg=self.bg)
+        # Not gridded here — shown only when tab is selected
+
+        self._tel_no_data = tk.Label(
+            self._telemetry_frame,
+            text="Nessun sensore configurato",
+            bg=self.bg, fg="#666666",
+            font=self.f_normal)
+        self._tel_no_data.pack(expand=True)
+
+    def _refresh_telemetry(self):
+        if not self._telemetry_store:
+            self._tel_no_data.pack(expand=True)
+            return
+        names = self._telemetry_store.sensor_names()
+        if not names:
+            self._tel_no_data.pack(expand=True)
+            return
+        self._tel_no_data.pack_forget()
+        # Destroy old graphs (keep the placeholder label)
+        for w in self._telemetry_frame.winfo_children():
+            if w is not self._tel_no_data:
+                w.destroy()
+        samples = self._telemetry_store.get_samples()
+        for name in names:
+            vals = [s.sensors[name] for s in samples if name in s.sensors]
+            if vals:
+                self._draw_sensor_mini_graph(self._telemetry_frame, name, vals)
+
+    def _draw_sensor_mini_graph(self, parent, name: str, values: list):
+        frame = tk.Frame(parent, bg=self.card, pady=4)
+        frame.pack(fill="x", padx=8, pady=3)
+        last = values[-1]
+        tk.Label(frame, text=f"{name}   {last:.1f}",
+                 bg=self.card, fg=self.accent,
+                 font=self.f_small).pack(anchor="w", padx=6)
+        c = tk.Canvas(frame, bg=self.card, height=40,
+                      highlightthickness=0)
+        c.pack(fill="x", padx=6)
+        c.update_idletasks()
+        w = c.winfo_width() or 200
+        h = 38
+        pts_vals = values[-60:]
+        mn, mx = min(pts_vals), max(pts_vals)
+        span = (mx - mn) or 1
+        pts = []
+        for i, v in enumerate(pts_vals):
+            x = int(i / max(len(pts_vals) - 1, 1) * w)
+            y = h - int((v - mn) / span * (h - 4)) - 2
+            pts += [x, y]
+        if len(pts) >= 4:
+            c.create_line(pts, fill=self.accent, width=1, smooth=True)
+
+    def set_telemetry_store(self, store: TelemetryStore):
+        """Inject TelemetryStore for the telemetry tab."""
+        self._telemetry_store = store
 
     # ------------------------------------------------------------------ #
     # Poll                                                                 #
