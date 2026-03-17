@@ -44,6 +44,7 @@ from ui.nodes_screen import NodesScreen
 from ui.debug_screen import DebugScreen
 from ui.settings import SettingsScreen
 from ui.keyboard import OnScreenKeyboard
+from ui.startup_check import StartupCheckScreen, run_startup_checks
 from data.telemetry_store import TelemetryStore, TelemetrySample
 
 # ── logging ────────────────────────────────────────────────────────────────
@@ -102,6 +103,7 @@ class App(tk.Tk):
     """
 
     SCREENS = {
+        "startup":  StartupCheckScreen,
         "home":     HomeScreen,
         "chat":     ChatScreen,
         "nodes":    NodesScreen,
@@ -127,7 +129,7 @@ class App(tk.Tk):
         self._build_screens()
         self._wire_hardware()
         self._start_watchdog()
-        self.navigate("home")
+        self._show_startup_check()
 
         self.protocol("WM_DELETE_WINDOW", self._on_quit)
 
@@ -151,6 +153,23 @@ class App(tk.Tk):
 
         self.watchdog.start()
         logger.info("ThreadWatchdog avviato (check ogni 10s)")
+
+    # ------------------------------------------------------------------ #
+    # Startup diagnostics                                                  #
+    # ------------------------------------------------------------------ #
+
+    def _show_startup_check(self):
+        """Display the diagnostic screen and run hardware checks."""
+        screen = self._screens["startup"]
+        screen.set_on_continue(lambda: self.navigate("home"))
+        self.navigate("startup")
+        # Run checks after the window is rendered (avoids blocking Tk init)
+        self.after(50, self._run_startup_checks)
+
+    def _run_startup_checks(self):
+        results = run_startup_checks(self.cfg)
+        self._screens["startup"].show_results(results)
+        logger.info("Startup checks: %s", results)
 
     # ------------------------------------------------------------------ #
     # Window setup                                                         #
