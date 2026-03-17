@@ -6,10 +6,11 @@
 
     "font_family": "DejaVu Sans",
     "font_family_mono": "DejaVu Sans Mono",
-    "font_size_large": 15,
-    "font_size_normal": 12,
-    "font_size_small": 10,
-    "font_size_icon": 14,
+    "font_size_large":  13,
+    "font_size_normal": 11,
+    "font_size_small":  9,
+    "font_size_icon":   11,
+    "font_scale": 1.0,
 
     "bg_color":          "#1B1B1F",
     "card_color":        "#25252D",

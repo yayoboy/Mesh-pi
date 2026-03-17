@@ -46,7 +46,7 @@ _NUM_ROWS = [
 
 # Key width weights: special keys span multiple units
 _SPACE_WEIGHT = 5   # space bar spans this many normal-key widths
-_KEY_H = 36         # key height in pixels
+_KEY_H = 34         # key height in pixels  (34 px ≈ 5.2 mm at 165 DPI)
 _PAD = 3            # gap between keys
 
 
@@ -109,9 +109,16 @@ class OnScreenKeyboard:
         bg  = cfg["bg_color"]
         fg  = cfg["fg_color"]
         acc = cfg["accent_color"]
-        dim = cfg["dim_color"]
-        font_key   = ("Courier", 13, "bold")
-        font_small = ("Courier", 10)
+        dim = cfg.get("fg_dim_color", "#888899")
+
+        # Derive key fonts from the same config values as BaseScreen,
+        # respecting font_scale.  Mono family used so digits are uniform width.
+        _scale = cfg.get("font_scale", 1.0)
+        mono   = cfg.get("font_family_mono", "Courier")
+        fn = max(6, round(cfg.get("font_size_normal", 11) * _scale))
+        fs = max(6, round(cfg.get("font_size_small",   9) * _scale))
+        font_key   = (mono, fn, "bold")
+        font_small = (mono, fs)
 
         display_w = cfg["display_width"]
         n_units_per_row = 10   # normal row has 10 keys → each unit = display_w / 10

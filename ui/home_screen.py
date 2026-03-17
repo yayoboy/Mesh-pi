@@ -100,7 +100,7 @@ class HomeScreen(BaseScreen):
         self._lbl_uptime.grid(row=0, column=3, sticky="e", padx=10)
 
         # Row 1: signal bars | RSSI | SNR | hop
-        self._lbl_sigbars = tk.Label(c, text="", font=("DejaVu Sans Mono", 13),
+        self._lbl_sigbars = tk.Label(c, text="", font=self.f_mono,
                                      fg=self.accent, bg=self.card)
         self._lbl_sigbars.grid(row=1, column=0, padx=(10, 4), pady=(0, 6))
 

@@ -177,7 +177,7 @@ class NodesScreen(BaseScreen):
         sig_frame.grid(row=1, column=1, columnspan=2, sticky="ew",
                        padx=(0, 8), pady=(0, 6))
 
-        sig_lbl = tk.Label(sig_frame, text="", font=("DejaVu Sans Mono", 11),
+        sig_lbl = tk.Label(sig_frame, text="", font=self.f_mono_s,
                            fg=self.accent, bg=self.card)
         sig_lbl.pack(side="left")
         frame._sig = sig_lbl

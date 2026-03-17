@@ -61,10 +61,20 @@ class BaseScreen(tk.Frame):
                            "Helvetica", "TkDefaultFont")
         mono  = _pick_font(cfg.get("font_family_mono", "DejaVu Sans Mono"),
                            "Courier", "TkFixedFont")
-        fl = cfg["font_size_large"]
-        fn = cfg["font_size_normal"]
-        fs = cfg["font_size_small"]
-        fi = cfg["font_size_icon"]
+
+        # font_scale lets you compensate for display DPI vs X11-reported DPI.
+        # E.g. a 3.5" 480×320 screen has ~165 DPI but X11 usually reports 96.
+        # Set font_scale = 165/96 ≈ 1.72 to get the correct physical text size,
+        # or leave at 1.0 to keep sizes as pixel-friendly values for the layout.
+        _scale = cfg.get("font_scale", 1.0)
+
+        def _sz(base: int) -> int:
+            return max(6, round(base * _scale))
+
+        fl = _sz(cfg["font_size_large"])
+        fn = _sz(cfg["font_size_normal"])
+        fs = _sz(cfg["font_size_small"])
+        fi = _sz(cfg["font_size_icon"])
 
         self.f_large  = (sans, fl, "bold")
         self.f_normal = (sans, fn)
@@ -115,12 +125,12 @@ class BaseScreen(tk.Frame):
                         font=self.f_small,
                         fg=color or self.accent,
                         bg=self.card,
-                        padx=6, pady=1)
+                        padx=5, pady=1)
 
     def avatar(self, parent, short_name: str, color: str = None) -> tk.Frame:
         """Coloured square badge with short node name (e.g. 'ALFA')."""
         bg = color or self.cfg["accent_dark_color"]
-        box = tk.Frame(parent, bg=bg, width=40, height=40)
+        box = tk.Frame(parent, bg=bg, width=36, height=36)
         box.pack_propagate(False)
         tk.Label(box, text=short_name[:4], font=self.f_bold,
                  fg=self.fg, bg=bg).place(relx=0.5, rely=0.5, anchor="center")
@@ -160,7 +170,7 @@ class BaseScreen(tk.Frame):
                 fg=fg, bg=self.nav_bg,
                 activeforeground=self.accent, activebackground=self.nav_bg,
                 relief="flat", bd=0,
-                pady=6,
+                pady=5,
                 command=lambda n=name: self.navigate(n),
             )
             if is_active:
