@@ -1,7 +1,96 @@
 # Mesh-Pi — Meshtastic Terminal UI
 
+![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)
+![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi-c51a4a?logo=raspberrypi&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
+
 Un'interfaccia grafica touchscreen per reti [Meshtastic](https://meshtastic.org) su **Raspberry Pi 3 Model A+**.
 La radio LoRa (Heltec WiFi LoRa 32 V3) gestisce la rete mesh; il Raspberry Pi è solo il cervello dell'interfaccia.
+
+---
+
+## Quick Start
+
+```bash
+# 1. Clona il repository
+git clone https://github.com/yayoboy/Mesh-pi.git
+cd Mesh-pi
+
+# 2. Esegui lo script di installazione (Raspberry Pi OS Bookworm)
+bash install.sh
+
+# 3. Avvio manuale per test
+.venv/bin/python3 main.py
+
+# 4. Avvio come servizio systemd (dopo install.sh)
+sudo systemctl start meshtastic-ui
+
+# 5. Verifica log
+journalctl -u meshtastic-ui -f
+```
+
+> **Senza hardware?** L'app si avvia in **demo mode** automaticamente se il radio non è collegato.
+> Leggi la sezione [Demo Mode](#demo-mode) per dettagli.
+
+---
+
+## Demo Mode
+
+Se la radio Heltec non è collegata (o su qualsiasi macchina di sviluppo), il sistema entra automaticamente in **demo mode**:
+
+- 3 nodi simulati con nomi casuali
+- Messaggi in arrivo generati ogni pochi secondi
+- RSSI, SNR, hop count simulati
+- Tutte le schermate UI navigabili
+
+```bash
+# Avvio in demo mode su qualsiasi macchina (macOS, Linux, Raspberry Pi)
+python3 -m venv .venv --system-site-packages
+source .venv/bin/activate
+pip install -r requirements.txt
+python3 main.py          # Demo mode attivo automaticamente
+```
+
+Nessuna configurazione necessaria. Ideale per sviluppare la UI senza hardware.
+
+---
+
+## Hardware supportato
+
+### Hardware certificato
+
+| Componente | Modello | Note |
+|-----------|---------|------|
+| SBC | Raspberry Pi 3 Model A+ | Testato e supportato |
+| Radio LoRa | Heltec WiFi LoRa 32 V3 | Firmware Meshtastic |
+| Display | 3.5" SPI, 480×320 px | Connessione /dev/fb1 |
+| GPS | Modulo seriale NMEA 0183 | Opzionale |
+
+### Periferiche opzionali GPIO
+
+| Periferica | Tipo | Configurabile da |
+|-----------|------|-----------------|
+| Encoder rotativo | Input | Settings → GPIO |
+| Pulsanti (2x) | Input | Settings → GPIO |
+| Buzzer | Output | Settings → GPIO |
+| GPS seriale | Input | Settings → GPS |
+
+### Sensori I2C opzionali
+
+| Sensore | Tipo | Libreria |
+|---------|------|---------|
+| INA219 / INA226 | Tensione, corrente, potenza | `pi-ina219` |
+| BME280 | Temperatura, umidità, pressione | `RPi.bme280` |
+| SHT30 | Temperatura, umidità | `smbus2` |
+
+### Consumi indicativi
+
+| Componente | Consumo |
+|-----------|---------|
+| Raspberry Pi 3 A+ | 3–5 W |
+| Heltec LoRa V3 | ~0.5 W |
+| Display 3.5" | ~1 W |
+| **Totale** | **~5–6 W** |
 
 ---
 
@@ -33,26 +122,7 @@ Tre livelli nettamente separati:
 | **Logica** | Callback, buffer messaggi, statistiche | `radio/meshtastic_client.py` |
 | **Interfaccia** | Tkinter touchscreen UI | `ui/` |
 
----
-
-## Hardware
-
-| Componente | Modello |
-|-----------|---------|
-| SBC | Raspberry Pi 3 Model A+ |
-| Radio LoRa | Heltec WiFi LoRa 32 V3 |
-| Display | 3.5" SPI touchscreen, 480×320 px |
-| Connessione radio | USB seriale (`/dev/ttyUSB0`) |
-| Alimentazione | Batteria 10 000 mAh + step-up 5 V |
-
-**Consumi indicativi**
-
-| Componente | Consumo |
-|-----------|---------|
-| Raspberry Pi 3 A+ | 3–5 W |
-| Heltec LoRa V3 | ~0.5 W |
-| Display 3.5" | ~1 W |
-| **Totale** | **~5–6 W** |
+Per una descrizione dettagliata dei thread, del flusso dati e dei moduli, vedi [docs/architecture.md](docs/architecture.md).
 
 ---
 
@@ -62,8 +132,10 @@ Tre livelli nettamente separati:
 Mesh-pi/
 ├── main.py                     # Entry point — App Tkinter, gestione schermate
 ├── requirements.txt            # Dipendenze Python con version bounds
+├── requirements-dev.txt        # Dipendenze per sviluppo e test
 ├── install.sh                  # Setup automatico su Raspberry Pi OS
 ├── meshtastic-ui.service       # Systemd service per avvio automatico
+├── CONTRIBUTING.md             # Guida per contributor
 ├── .gitignore
 │
 ├── config/
@@ -72,14 +144,33 @@ Mesh-pi/
 ├── radio/
 │   └── meshtastic_client.py    # Client Meshtastic thread-safe + demo mode
 │
-└── ui/
-    ├── base_screen.py          # Classe base: colori, font, helper widget
-    ├── icons.py                # Icone Unicode, barre segnale, batteria
-    ├── keyboard.py             # Tastiera on-screen per touchscreen
-    ├── home_screen.py          # Schermata Home — stato rete
-    ├── chat_screen.py          # Schermata Chat — messaggi
-    ├── nodes_screen.py         # Schermata Nodi — lista nodi mesh
-    └── debug_screen.py         # Schermata Debug — telemetria radio
+├── hardware/
+│   ├── gpio_manager.py         # Dispatcher centrale eventi GPIO
+│   ├── gpio_config.py          # Modello dati pin→funzione
+│   ├── i2c_manager.py          # Orchestratore sensori I2C
+│   ├── gps_reader.py           # Parser NMEA seriale
+│   ├── buzzer.py               # Toni async
+│   ├── watchdog.py             # Supervisor thread
+│   └── status.py               # HardwareStatus enum
+│
+├── data/
+│   └── telemetry_store.py      # Buffer circolare persistente
+│
+├── ui/
+│   ├── base_screen.py          # Classe base: colori, font, helper widget
+│   ├── icons.py                # Icone Unicode, barre segnale, batteria
+│   ├── keyboard.py             # Tastiera on-screen per touchscreen
+│   ├── home_screen.py          # Schermata Home — stato rete
+│   ├── chat_screen.py          # Schermata Chat — messaggi
+│   ├── nodes_screen.py         # Schermata Nodi — lista nodi mesh
+│   ├── debug_screen.py         # Schermata Debug — telemetria + log
+│   └── settings/               # Schermata Impostazioni (4 tab)
+│
+├── tests/                      # Suite pytest
+│
+└── docs/
+    ├── architecture.md         # Threading model, moduli, flusso dati
+    └── troubleshooting.md      # Problemi comuni e soluzioni
 ```
 
 ---
@@ -122,10 +213,6 @@ sudo systemctl start meshtastic-ui
 # Verifica log
 journalctl -u meshtastic-ui -f
 ```
-
-### Demo mode (senza hardware)
-
-Se la libreria `meshtastic` non è installata o la radio non è collegata, il sistema entra automaticamente in **demo mode**: genera traffico finto con tre nodi simulati e messaggi casuali. Ideale per sviluppo e test della UI.
 
 ---
 
@@ -190,6 +277,7 @@ Dashboard principale con:
 - Barre orizzontali RSSI e SNR con colore dinamico (verde/arancio/rosso)
 - Chip: HOP / RX / TX / CH-UTIL
 - Sparkline RSSI degli ultimi 60 campioni con linea di riferimento a -100 dBm
+- Log viewer in-app con aggiornamento automatico
 
 ---
 
@@ -218,11 +306,16 @@ Si attiva automaticamente toccando qualsiasi campo di testo.
 | `protobuf` | `>=4.21.12,<6.0.0` | Serializzazione proto3 |
 | `requests` | `>=2.31.0,<3.0.0` | Usato da meshtastic internamente |
 | `PyYAML` | `>=6.0.1,<7.0.0` | Configurazione meshtastic |
+| `gpiozero` | `>=2.0,<3.0` | GPIO: encoder, pulsanti, buzzer |
+| `pynmea2` | `>=1.19.0,<2.0.0` | Parser NMEA per GPS |
+| `smbus2` | `>=0.4.2,<1.0.0` | I2C bus access |
+| `pi-ina219` | `>=1.4.1,<2.0.0` | Sensore INA219/INA226 |
+| `RPi.bme280` | `>=0.2.4,<1.0.0` | Sensore BME280 |
 
 > **Nota**: `tkinter` deve essere installato come pacchetto di sistema (`python3-tk`), non tramite pip.
 > **Nota**: `bleak` (BLE) è una dipendenza obbligatoria di meshtastic anche per connessioni USB. Richiede D-Bus su Linux (`python3-dbus`).
 
-### Nota sul namespace protobuf (meshtastic ≥ 2.3.13)
+### Nota sul namespace protobuf (meshtastic >= 2.3.13)
 
 A partire da meshtastic 2.3.13 i moduli protobuf sono stati spostati:
 
@@ -261,6 +354,26 @@ Variabili d'ambiente nel service file:
 |-----------|--------|---------|
 | `MESHTASTIC_FULLSCREEN` | `1` | Finestra a tutto schermo |
 | `MESHTASTIC_HIDE_CURSOR` | `1` | Nasconde il cursore mouse |
+
+---
+
+## Documentazione
+
+| Documento | Contenuto |
+|-----------|-----------|
+| [docs/architecture.md](docs/architecture.md) | Threading model, moduli, flusso dati radio→UI |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Problemi comuni e soluzioni passo-passo |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Ambiente di sviluppo, convenzioni, come contribuire |
+
+---
+
+## Contribuire
+
+Le contribuzioni sono benvenute. Leggi [CONTRIBUTING.md](CONTRIBUTING.md) per:
+- Setup ambiente locale (funziona su macOS e Linux, senza hardware)
+- Convenzioni dei commit
+- Come aggiungere sensori I2C o nuove schermate
+- Come aprire una Pull Request
 
 ---
 
