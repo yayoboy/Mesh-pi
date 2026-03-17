@@ -37,11 +37,40 @@ def signal_bars(rssi: int) -> str:
 
 
 def signal_level(rssi: int) -> int:
-    """0–4 signal quality from RSSI."""
+    """0–4 signal quality from RSSI (dBm)."""
     if rssi >= -70:    return 4
     if rssi >= -85:    return 3
     if rssi >= -100:   return 2
     if rssi >= -115:   return 1
+    return 0
+
+
+def signal_bars_snr(snr: float) -> str:
+    """4-char staircase from SNR (dB) — used for LoRa node-db entries.
+
+    Meshtastic stores SNR (not RSSI) in the nodes dict; RSSI is only
+    available on received packets (rxRssi).  SNR thresholds for LoRa:
+      > 5 dB  → excellent  (4 bars)
+      0–5 dB  → good       (3 bars)
+    -10–0 dB  → fair       (2 bars)
+    -20–-10   → poor       (1 bar)
+      < -20   → none       (0 bars)
+    """
+    if snr > 5:    level = 4
+    elif snr >= 0: level = 3
+    elif snr >= -10: level = 2
+    elif snr >= -20: level = 1
+    else:            level = 0
+    return "".join(_SIG_CHARS[i] if i < level else _SIG_EMPTY
+                   for i in range(4))
+
+
+def signal_level_snr(snr: float) -> int:
+    """0–4 signal quality from SNR (dB)."""
+    if snr > 5:      return 4
+    if snr >= 0:     return 3
+    if snr >= -10:   return 2
+    if snr >= -20:   return 1
     return 0
 
 

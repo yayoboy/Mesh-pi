@@ -22,7 +22,7 @@ Layout (480×320):
 
 import tkinter as tk
 from .base_screen import BaseScreen
-from .icons import signal_bars, battery_icon, hop_arrows, DOT_ON
+from .icons import signal_bars, signal_bars_snr, battery_icon, hop_arrows, DOT_ON
 
 
 # Palette for node avatar badges — cycles through nodes
@@ -122,8 +122,8 @@ class NodesScreen(BaseScreen):
             if nid not in seen:
                 self._node_cards.pop(nid).destroy()
 
-        # Sort by signal strength
-        for node in sorted(nodes, key=lambda n: n.rssi, reverse=True):
+        # Sort by SNR (always available from node db); fall back to rssi
+        for node in sorted(nodes, key=lambda n: n.snr, reverse=True):
             if node.node_id in self._node_cards:
                 self._update_card(self._node_cards[node.node_id], node)
             else:
@@ -200,16 +200,31 @@ class NodesScreen(BaseScreen):
         return frame
 
     def _update_card(self, frame, node):
-        color = self.rssi_color(node.rssi)
+        # Prefer RSSI (from received packets) for display; fall back to SNR
+        # RSSI is only known after we've received a packet from this node.
+        if node.rssi != 0:
+            bars  = signal_bars(node.rssi)
+            color = self.rssi_color(node.rssi)
+            sig_text = f"{node.rssi} dBm"
+        else:
+            bars  = signal_bars_snr(node.snr)
+            color = self._snr_color(node.snr)
+            sig_text = f"SNR {node.snr:+.1f} dB"
+
         frame._name.config(text=node.display_name)
-        frame._sig.config(text=signal_bars(node.rssi), fg=color)
-        frame._rssi.config(text=f"{node.rssi} dBm")
+        frame._sig.config(text=bars, fg=color)
+        frame._rssi.config(text=sig_text)
         frame._hop.config(text=hop_arrows(node.hops))
         if hasattr(node, "battery_level") and node.battery_level >= 0:
             frame._bat.config(text=battery_icon(node.battery_level))
         else:
             frame._bat.config(text="")
         frame._node = node
+
+    def _snr_color(self, snr: float) -> str:
+        if snr > 5:    return self.online
+        if snr >= 0:   return self.warn
+        return self.err
 
     def _schedule_age(self, frame):
         def _tick():

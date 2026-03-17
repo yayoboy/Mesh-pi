@@ -246,18 +246,25 @@ class MeshtasticClient:
                 return
 
             from_id = str(packet.get("from", "???"))
-            node = self.nodes.get(from_id)
-            sender = node.display_name if node else from_id[-4:]
 
+            # rxRssi and rxSnr are per-packet radio metrics (only in received packets,
+            # not stored in the nodes dict — that's why we update the node here).
             rssi = packet.get("rxRssi", 0)
-            snr = packet.get("rxSnr", 0.0)
-            hops = packet.get("hopLimit", 0)
+            snr  = packet.get("rxSnr", 0.0)
+            hops = packet.get("hopStart", packet.get("hopLimit", 0))
 
             with self._lock:
                 self.stats.rssi = rssi
-                self.stats.snr = snr
+                self.stats.snr  = snr
                 self.stats.hops = hops
                 self.stats.rx_packets += 1
+                # Back-fill the node's RSSI with the latest received-packet value
+                if from_id in self.nodes:
+                    self.nodes[from_id].rssi = rssi
+                    self.nodes[from_id].snr  = snr
+
+            node = self.nodes.get(from_id)
+            sender = node.display_name if node else from_id[-4:]
 
             msg = Message(sender=sender, text=text, rssi=rssi, snr=snr, hops=hops)
             self._deliver_message(msg)
@@ -267,16 +274,39 @@ class MeshtasticClient:
     def _on_node_info(self, node, interface) -> None:
         try:
             node_id = str(node.get("num", ""))
-            user = node.get("user", {})
+            if not node_id:
+                return
+
+            user    = node.get("user", {})
             metrics = node.get("deviceMetrics", {})
-            pos = node.get("position", {})
+            pos     = node.get("position", {})
+
+            # lastHeard is a unix timestamp (int); convert to datetime
+            last_heard_ts = node.get("lastHeard", 0)
+            if last_heard_ts:
+                last_heard = datetime.fromtimestamp(last_heard_ts)
+            else:
+                last_heard = datetime.now()
+
+            # NOTE: RSSI is NOT stored in the nodes dict — it only comes from
+            # received packets (rxRssi).  We preserve any RSSI we already
+            # learned via _on_receive; SNR from the node dict is the link SNR
+            # that Meshtastic stores after the last observed packet.
+            existing = self.nodes.get(node_id)
+            existing_rssi = existing.rssi if existing else 0
+
+            # channelUtilization / airUtilTx — update global RadioStats too
+            ch_util  = metrics.get("channelUtilization", 0.0)
+            air_util = metrics.get("airUtilTx", 0.0)
 
             info = NodeInfo(
                 node_id=node_id,
                 long_name=user.get("longName", ""),
                 short_name=user.get("shortName", ""),
-                rssi=node.get("snr", 0),   # field varies by fw version
-                snr=node.get("snr", 0.0),
+                rssi=existing_rssi,                    # kept from last rx packet
+                snr=node.get("snr", 0.0),              # link SNR from node db
+                hops=node.get("hopsAway", 0),          # hop distance from us
+                last_heard=last_heard,
                 latitude=pos.get("latitude", 0.0),
                 longitude=pos.get("longitude", 0.0),
                 battery_level=metrics.get("batteryLevel", -1),
@@ -284,6 +314,10 @@ class MeshtasticClient:
 
             with self._lock:
                 self.nodes[node_id] = info
+                if ch_util:
+                    self.stats.channel_util = ch_util
+                if air_util:
+                    self.stats.air_util = air_util
 
             for cb in self._node_callbacks:
                 try:
