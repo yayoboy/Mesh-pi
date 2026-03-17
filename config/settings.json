@@ -28,5 +28,55 @@
     "max_messages": 100,
     "node_timeout_sec": 300,
     "refresh_interval_ms": 500,
-    "node_name": "MESH-PI"
+    "node_name": "MESH-PI",
+
+    "hardware": {
+        "encoder": {
+            "enabled": false,
+            "pin_clk": 17,
+            "pin_dt": 18,
+            "pin_sw": 27,
+            "long_press_sec": 0.8,
+            "actions": {
+                "rotate_cw":   "scroll_down",
+                "rotate_ccw":  "scroll_up",
+                "press":       "select",
+                "long_press":  "navigate_prev"
+            }
+        },
+        "buttons": [
+            {
+                "enabled": false,
+                "pin": 22,
+                "label": "Pulsante 1",
+                "action": "navigate_home",
+                "pull_up": true,
+                "bounce_time": 0.05
+            },
+            {
+                "enabled": false,
+                "pin": 23,
+                "label": "Pulsante 2",
+                "action": "navigate_chat",
+                "pull_up": true,
+                "bounce_time": 0.05
+            }
+        ],
+        "buzzer": {
+            "enabled": false,
+            "pin": 24,
+            "pwm": true,
+            "events": {
+                "new_message":  true,
+                "node_online":  false,
+                "node_offline": false
+            }
+        },
+        "gps": {
+            "enabled": false,
+            "port": "/dev/ttyAMA0",
+            "baud": 9600,
+            "update_mesh_position": false
+        }
+    }
 }

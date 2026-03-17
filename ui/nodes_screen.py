@@ -110,6 +110,9 @@ class NodesScreen(BaseScreen):
     def on_enter(self):
         self._refresh_nodes()
 
+    def on_scroll(self, direction: int):
+        self._canvas.yview_scroll(direction, "units")
+
     def _on_node_update(self, _node):
         self._inner.after(0, self._refresh_nodes)
 

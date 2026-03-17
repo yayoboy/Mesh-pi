@@ -8,10 +8,11 @@ Signal staircase uses Block Elements U+2581–U+2588 (▁▂▃▄▅▆▇█).
 """
 
 # ── Nav bar icons ──────────────────────────────────────────────────────────
-ICON_HOME  = "⌂"    # U+2302  HOUSE
-ICON_CHAT  = "✉"    # U+2709  ENVELOPE
-ICON_NODES = "◉"    # U+25C9  FISHEYE / node
-ICON_DEBUG = "⚙"    # U+2699  GEAR
+ICON_HOME     = "⌂"    # U+2302  HOUSE
+ICON_CHAT     = "✉"    # U+2709  ENVELOPE
+ICON_NODES    = "◉"    # U+25C9  FISHEYE / node
+ICON_DEBUG    = "≡"    # U+2261  IDENTICAL TO  (data/signal lines)
+ICON_SETTINGS = "⚙"    # U+2699  GEAR
 
 # ── Status indicators ──────────────────────────────────────────────────────
 DOT_ON  = "●"        # U+25CF

@@ -43,10 +43,16 @@ sudo apt-get install -y \
     libglib2.0-dev \
     python3-dbus \
     dbus \
-    libdbus-1-dev
-# python3-tk   — Tkinter (must be system package, not pip)
+    libdbus-1-dev \
+    python3-lgpio \
+    python3-gpiozero \
+    python3-serial
+# python3-tk       — Tkinter (must be system package, not pip)
 # libglib2.0-dev / python3-dbus — needed by bleak (BLE, pulled in by meshtastic)
-# dbus — D-Bus daemon required by bleak on Linux
+# dbus             — D-Bus daemon required by bleak on Linux
+# python3-lgpio    — lgpio pin factory backend for gpiozero (Pi OS Bookworm default)
+# python3-gpiozero — exposes RotaryEncoder, Button, TonalBuzzer etc.
+# python3-serial   — system pyserial (also installed by pip, but good to have system pkg)
 
 # ── 3. Virtual environment ─────────────────────────────────────────────────
 info "Creating virtual environment at $VENV_DIR …"

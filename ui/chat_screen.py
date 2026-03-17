@@ -183,6 +183,9 @@ class ChatScreen(BaseScreen):
     def on_enter(self):
         self._update_nodes()
 
+    def on_scroll(self, direction: int):
+        self._txt.yview_scroll(direction, "units")
+
     def _on_message(self, msg):
         self._txt.after(0, self._append, msg)
 
