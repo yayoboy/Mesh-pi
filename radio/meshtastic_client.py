@@ -49,7 +49,8 @@ class NodeInfo:
     def __init__(self, node_id: str, long_name: str = "", short_name: str = "",
                  rssi: int = 0, snr: float = 0.0, hops: int = 0,
                  last_heard: Optional[datetime] = None,
-                 latitude: float = 0.0, longitude: float = 0.0):
+                 latitude: float = 0.0, longitude: float = 0.0,
+                 battery_level: int = -1):
         self.node_id = node_id
         self.long_name = long_name
         self.short_name = short_name or node_id[-4:]
@@ -59,6 +60,7 @@ class NodeInfo:
         self.last_heard = last_heard or datetime.now()
         self.latitude = latitude
         self.longitude = longitude
+        self.battery_level = battery_level   # 0-100, -1 = unknown
 
     @property
     def display_name(self) -> str:
@@ -277,6 +279,7 @@ class MeshtasticClient:
                 snr=node.get("snr", 0.0),
                 latitude=pos.get("latitude", 0.0),
                 longitude=pos.get("longitude", 0.0),
+                battery_level=metrics.get("batteryLevel", -1),
             )
 
             with self._lock:
@@ -330,9 +333,9 @@ class MeshtasticClient:
         self.my_node_id = "!DEMO"
         self.my_node_name = "MESH-PI-DEMO"
         self.nodes = {
-            "!aabb": NodeInfo("!aabb", "Base Alpha", "ALFA", rssi=-85, snr=7.5, hops=0),
-            "!ccdd": NodeInfo("!ccdd", "Patrol Bravo", "BRAV", rssi=-102, snr=3.2, hops=1),
-            "!eeff": NodeInfo("!eeff", "Relay Charlie", "CHAR", rssi=-78, snr=10.1, hops=0),
+            "!aabb": NodeInfo("!aabb", "Base Alpha",   "ALFA", rssi=-85,  snr=7.5,  hops=0, battery_level=80),
+            "!ccdd": NodeInfo("!ccdd", "Patrol Bravo", "BRAV", rssi=-102, snr=3.2,  hops=1, battery_level=45),
+            "!eeff": NodeInfo("!eeff", "Relay Charlie","CHAR", rssi=-78,  snr=10.1, hops=0, battery_level=12),
         }
         self.stats.rssi = -85
         self.stats.snr = 7.5

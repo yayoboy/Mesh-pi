@@ -1,22 +1,35 @@
 """
-Nodes screen — list of visible nodes with signal info.
+Nodes screen — Meshtastic-style node cards.
 
 Layout (480×320):
-  ┌─────────────────────────────────────┐
-  │  NODI IN RETE              [aggiorna]│
-  ├─────────────────────────────────────┤
-  │  ◉ Base Alpha    ALFA  -85dBm  0hop │
-  │  ◉ Patrol Bravo  BRAV  -102dBm 1hop │
-  │  ○ Relay Charlie CHAR  -78dBm  0hop │
-  │  …                                  │
-  ├─────────────────────────────────────┤
-  │ [HOME] [CHAT] [NODI] [DEBUG]        │
-  └─────────────────────────────────────┘
+  ┌─────────────────────────────────────────────┐
+  │  ◉ NODI IN RETE                  3 online   │
+  ├─────────────────────────────────────────────┤
+  │  ┌───────────────────────────────────────┐  │
+  │  │ ┌────┐  Base Alpha          12s fa    │  │
+  │  │ │ALFA│  ▂▄▆█ -85 dBm  ⊕ direct       │  │
+  │  │ └────┘  ⚡████░  80%                  │  │
+  │  └───────────────────────────────────────┘  │
+  │  ┌───────────────────────────────────────┐  │
+  │  │ ┌────┐  Patrol Bravo        45s fa    │  │
+  │  │ │BRAV│  ▂▄·· -102dBm  → 1hop         │  │
+  │  │ └────┘                                │  │
+  │  └───────────────────────────────────────┘  │
+  ├─────────────────────────────────────────────┤
+  │  ⌂ HOME   ✉ CHAT   ◉ NODI   ⚙ DEBUG        │
+  └─────────────────────────────────────────────┘
 """
 
 import tkinter as tk
-from datetime import datetime
 from .base_screen import BaseScreen
+from .icons import signal_bars, battery_icon, hop_arrows, DOT_ON
+
+
+# Palette for node avatar badges — cycles through nodes
+_AVATAR_COLORS = [
+    "#3D7A72", "#5B4A8A", "#8A4A3D", "#3D6A8A",
+    "#8A7A3D", "#4A8A3D", "#8A3D6A", "#3D4A8A",
+]
 
 
 class NodesScreen(BaseScreen):
@@ -25,7 +38,10 @@ class NodesScreen(BaseScreen):
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
 
-        self._build_header()
+        self._color_map: dict[str, str] = {}
+        self._color_idx = 0
+
+        self._build_topbar()
         self._build_list()
         nav = self.nav_bar(self, "nodes")
         nav.grid(row=2, column=0, sticky="ew")
@@ -33,25 +49,30 @@ class NodesScreen(BaseScreen):
         self.client.on_node_update(self._on_node_update)
 
     # ------------------------------------------------------------------ #
-    # Header                                                               #
+    # Top bar                                                              #
     # ------------------------------------------------------------------ #
 
-    def _build_header(self):
-        hdr = tk.Frame(self, bg=self.dim)
-        hdr.grid(row=0, column=0, sticky="ew")
+    def _build_topbar(self):
+        bar = tk.Frame(self, bg=self.topbar)
+        bar.grid(row=0, column=0, sticky="ew")
 
-        tk.Label(hdr, text="NODI IN RETE", font=self.font_large,
-                 fg=self.fg, bg=self.dim).pack(side="left", padx=8, pady=2)
+        tk.Label(bar, text=f"{DOT_ON} NODI IN RETE",
+                 font=self.f_bold, fg=self.fg, bg=self.topbar
+                 ).pack(side="left", padx=8, pady=4)
 
-        self._lbl_count = tk.Label(hdr, text="", font=self.font_small,
-                                   fg=self.accent, bg=self.dim)
-        self._lbl_count.pack(side="right", padx=(0, 8))
+        self._lbl_count = tk.Label(bar, text="", font=self.f_small,
+                                   fg=self.accent, bg=self.topbar)
+        self._lbl_count.pack(side="right", padx=10)
 
-        self.button(hdr, "↺", self._refresh_nodes, width=3
-                    ).pack(side="right", padx=4)
+        tk.Button(bar, text="↺", font=self.f_icon,
+                  fg=self.dim, bg=self.topbar,
+                  activeforeground=self.accent, activebackground=self.topbar,
+                  relief="flat", bd=0, pady=2,
+                  command=self._refresh_nodes
+                  ).pack(side="right", padx=4)
 
     # ------------------------------------------------------------------ #
-    # Node list                                                            #
+    # Scrollable node list                                                 #
     # ------------------------------------------------------------------ #
 
     def _build_list(self):
@@ -65,23 +86,22 @@ class NodesScreen(BaseScreen):
 
         sb = tk.Scrollbar(container, orient="vertical",
                           command=self._canvas.yview,
-                          bg=self.dim, troughcolor=self.bg, width=8)
+                          bg=self.card, troughcolor=self.bg, width=6)
         sb.grid(row=0, column=1, sticky="ns")
         self._canvas.config(yscrollcommand=sb.set)
 
         self._inner = tk.Frame(self._canvas, bg=self.bg)
-        self._window = self._canvas.create_window((0, 0), window=self._inner,
-                                                  anchor="nw")
-        self._inner.bind("<Configure>", self._on_inner_resize)
-        self._canvas.bind("<Configure>", self._on_canvas_resize)
+        self._win_id = self._canvas.create_window(
+            (0, 0), window=self._inner, anchor="nw")
 
-        self._node_rows: dict[str, tk.Frame] = {}
+        self._inner.bind("<Configure>",
+                         lambda _e: self._canvas.configure(
+                             scrollregion=self._canvas.bbox("all")))
+        self._canvas.bind("<Configure>",
+                          lambda e: self._canvas.itemconfig(
+                              self._win_id, width=e.width))
 
-    def _on_inner_resize(self, _event):
-        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
-
-    def _on_canvas_resize(self, event):
-        self._canvas.itemconfig(self._window, width=event.width)
+        self._node_cards: dict[str, tk.Frame] = {}
 
     # ------------------------------------------------------------------ #
     # Callbacks                                                            #
@@ -90,103 +110,118 @@ class NodesScreen(BaseScreen):
     def on_enter(self):
         self._refresh_nodes()
 
-    def _on_node_update(self, node):
+    def _on_node_update(self, _node):
         self._inner.after(0, self._refresh_nodes)
 
     def _refresh_nodes(self):
         nodes = self.client.get_nodes()
-
-        # Remove stale rows
         seen = {n.node_id for n in nodes}
-        for nid in list(self._node_rows.keys()):
+
+        # Destroy cards for gone nodes
+        for nid in list(self._node_cards.keys()):
             if nid not in seen:
-                self._node_rows.pop(nid).destroy()
+                self._node_cards.pop(nid).destroy()
 
-        # Add / update rows
-        for i, node in enumerate(sorted(nodes, key=lambda n: n.rssi, reverse=True)):
-            if node.node_id in self._node_rows:
-                self._update_row(self._node_rows[node.node_id], node)
+        # Sort by signal strength
+        for node in sorted(nodes, key=lambda n: n.rssi, reverse=True):
+            if node.node_id in self._node_cards:
+                self._update_card(self._node_cards[node.node_id], node)
             else:
-                row = self._create_row(node)
-                row.pack(fill="x", padx=4, pady=1)
-                self._node_rows[node.node_id] = row
+                card = self._create_card(node)
+                card.pack(fill="x", padx=8, pady=4)
+                self._node_cards[node.node_id] = card
 
-        self._lbl_count.config(text=f"{len(nodes)} nodi")
+        n = len(nodes)
+        self._lbl_count.config(
+            text=f"{n} nod{'o' if n == 1 else 'i'} online")
 
-    def _create_row(self, node) -> tk.Frame:
-        row = tk.Frame(self._inner, bg="#111111", padx=4, pady=3)
-        row.columnconfigure(1, weight=1)
+    def _node_color(self, node_id: str) -> str:
+        if node_id not in self._color_map:
+            self._color_map[node_id] = \
+                _AVATAR_COLORS[self._color_idx % len(_AVATAR_COLORS)]
+            self._color_idx += 1
+        return self._color_map[node_id]
 
-        # Status dot
-        dot = tk.Label(row, text="◉", font=self.font_bold,
-                       fg=self._signal_color(node.rssi), bg="#111111")
-        dot.grid(row=0, column=0, padx=(0, 6))
-        row._dot = dot
+    # ------------------------------------------------------------------ #
+    # Card construction                                                    #
+    # ------------------------------------------------------------------ #
 
-        # Name
-        name_lbl = tk.Label(row, text=node.display_name, font=self.font_bold,
-                            fg=self.fg, bg="#111111", anchor="w")
-        name_lbl.grid(row=0, column=1, sticky="w")
-        row._name = name_lbl
+    def _create_card(self, node) -> tk.Frame:
+        color = self._node_color(node.node_id)
 
-        # Short name
-        short_lbl = tk.Label(row, text=node.short_name, font=self.font_small,
-                             fg=self.dim, bg="#111111", width=6, anchor="w")
-        short_lbl.grid(row=0, column=2)
-        row._short = short_lbl
+        frame = self.card(self._inner)
+        frame.columnconfigure(1, weight=1)
 
-        # RSSI
-        rssi_lbl = tk.Label(row, text=f"{node.rssi} dBm",
-                            font=self.font_small,
-                            fg=self._signal_color(node.rssi), bg="#111111",
-                            width=9, anchor="e")
-        rssi_lbl.grid(row=0, column=3)
-        row._rssi = rssi_lbl
+        # ── Avatar badge ──────────────────────────────────────────────
+        av = self.avatar(frame, node.short_name, color)
+        av.grid(row=0, column=0, rowspan=2, padx=(8, 10), pady=8, sticky="ns")
+        frame._avatar = av
 
-        # Hops
-        hop_lbl = tk.Label(row, text=f"{node.hops}hop",
-                           font=self.font_small, fg=self.dim, bg="#111111",
-                           width=5, anchor="e")
-        hop_lbl.grid(row=0, column=4, padx=(0, 4))
-        row._hop = hop_lbl
+        # ── Top row: name + last heard ───────────────────────────────
+        name_lbl = tk.Label(frame, text=node.display_name,
+                            font=self.f_bold, fg=self.fg, bg=self.card,
+                            anchor="w")
+        name_lbl.grid(row=0, column=1, sticky="w", pady=(6, 0))
+        frame._name = name_lbl
 
-        # Age (seconds since heard)
-        age_lbl = tk.Label(row, text="", font=self.font_small,
-                           fg=self.dim, bg="#111111", width=6, anchor="e")
-        age_lbl.grid(row=0, column=5)
-        row._age = age_lbl
+        age_lbl = tk.Label(frame, text="", font=self.f_small,
+                           fg=self.dim, bg=self.card, anchor="e")
+        age_lbl.grid(row=0, column=2, sticky="e", padx=8, pady=(6, 0))
+        frame._age = age_lbl
 
-        row._node = node
-        self._schedule_age_update(row)
-        return row
+        # ── Bottom row: signal bars + RSSI + hop ─────────────────────
+        sig_frame = tk.Frame(frame, bg=self.card)
+        sig_frame.grid(row=1, column=1, columnspan=2, sticky="ew",
+                       padx=(0, 8), pady=(0, 6))
 
-    def _update_row(self, row, node):
-        color = self._signal_color(node.rssi)
-        row._dot.config(fg=color)
-        row._name.config(text=node.display_name)
-        row._short.config(text=node.short_name)
-        row._rssi.config(text=f"{node.rssi} dBm", fg=color)
-        row._hop.config(text=f"{node.hops}hop")
-        row._node = node
+        sig_lbl = tk.Label(sig_frame, text="", font=("DejaVu Sans Mono", 11),
+                           fg=self.accent, bg=self.card)
+        sig_lbl.pack(side="left")
+        frame._sig = sig_lbl
 
-    def _schedule_age_update(self, row):
+        rssi_lbl = tk.Label(sig_frame, text="", font=self.f_small,
+                            fg=self.dim, bg=self.card)
+        rssi_lbl.pack(side="left", padx=(6, 0))
+        frame._rssi = rssi_lbl
+
+        hop_lbl = tk.Label(sig_frame, text="", font=self.f_small,
+                           fg=self.dim, bg=self.card)
+        hop_lbl.pack(side="left", padx=(8, 0))
+        frame._hop = hop_lbl
+
+        bat_lbl = tk.Label(sig_frame, text="", font=self.f_small,
+                           fg=self.online, bg=self.card)
+        bat_lbl.pack(side="right", padx=4)
+        frame._bat = bat_lbl
+
+        frame._node = node
+        self._update_card(frame, node)
+        self._schedule_age(frame)
+        return frame
+
+    def _update_card(self, frame, node):
+        color = self.rssi_color(node.rssi)
+        frame._name.config(text=node.display_name)
+        frame._sig.config(text=signal_bars(node.rssi), fg=color)
+        frame._rssi.config(text=f"{node.rssi} dBm")
+        frame._hop.config(text=hop_arrows(node.hops))
+        if hasattr(node, "battery_level") and node.battery_level >= 0:
+            frame._bat.config(text=battery_icon(node.battery_level))
+        else:
+            frame._bat.config(text="")
+        frame._node = node
+
+    def _schedule_age(self, frame):
         def _tick():
-            if not row.winfo_exists():
+            if not frame.winfo_exists():
                 return
-            sec = int(row._node.seconds_since_heard)
+            sec = int(frame._node.seconds_since_heard)
             if sec < 60:
-                age_str = f"{sec}s"
+                s = f"{sec}s fa"
             elif sec < 3600:
-                age_str = f"{sec // 60}m"
+                s = f"{sec // 60}m fa"
             else:
-                age_str = f"{sec // 3600}h"
-            row._age.config(text=age_str)
-            row.after(5000, _tick)
+                s = f"{sec // 3600}h fa"
+            frame._age.config(text=s)
+            frame.after(5000, _tick)
         _tick()
-
-    def _signal_color(self, rssi: int) -> str:
-        if rssi >= -80:
-            return self.accent
-        if rssi >= -100:
-            return "#ffcc00"
-        return self.err
