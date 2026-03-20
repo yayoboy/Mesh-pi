@@ -21,7 +21,7 @@ Layout helpers:
 import tkinter as tk
 import tkinter.font as tkfont
 
-from .icons import ICON_HOME, ICON_CHAT, ICON_NODES, ICON_DEBUG, ICON_SETTINGS
+from .icons import ICON_HOME, ICON_CHAT, ICON_NODES, ICON_DEBUG, ICON_SETTINGS, ICON_MAP
 
 
 def _pick_font(*names: str) -> str:
@@ -152,14 +152,15 @@ class BaseScreen(tk.Frame):
         )
 
     def nav_bar(self, parent, current: str) -> tk.Frame:
-        """Bottom navigation bar with Unicode icons (5 screens)."""
+        """Bottom navigation bar with Unicode icons (6 screens)."""
         bar = tk.Frame(parent, bg=self.nav_bg)
         items = [
-            (f"{ICON_HOME} HOME",      "home"),
-            (f"{ICON_CHAT} CHAT",      "chat"),
-            (f"{ICON_NODES} NODI",     "nodes"),
-            (f"{ICON_DEBUG} DEBUG",    "debug"),
-            (f"{ICON_SETTINGS} CONFIG","settings"),
+            (f"{ICON_HOME} HOME",    "home"),
+            (f"{ICON_CHAT} CHAT",    "chat"),
+            (f"{ICON_NODES} NODI",   "nodes"),
+            (f"{ICON_MAP} MAPPA",    "map"),
+            (f"{ICON_DEBUG} DEBUG",  "debug"),
+            (f"{ICON_SETTINGS} CFG", "settings"),
         ]
         for label, name in items:
             is_active = name == current

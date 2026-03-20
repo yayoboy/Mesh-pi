@@ -42,6 +42,7 @@ from ui.chat_screen import ChatScreen
 from ui.nodes_screen import NodesScreen
 from ui.debug_screen import DebugScreen
 from ui.settings_screen import SettingsScreen
+from ui.map_screen import MapScreen
 from ui.keyboard import OnScreenKeyboard
 
 # ── logging ────────────────────────────────────────────────────────────────
@@ -73,7 +74,7 @@ logging.getLogger().addHandler(_file_handler)
 logger = logging.getLogger("main")
 logger.info("Avvio Meshtastic UI — log su /tmp/meshtastic-ui.log")
 
-_SCREEN_ORDER = ["home", "chat", "nodes", "debug", "settings"]
+_SCREEN_ORDER = ["home", "chat", "nodes", "map", "debug", "settings"]
 
 
 # ── helpers ────────────────────────────────────────────────────────────────
@@ -103,6 +104,7 @@ class App(tk.Tk):
         "home":     HomeScreen,
         "chat":     ChatScreen,
         "nodes":    NodesScreen,
+        "map":      MapScreen,
         "debug":    DebugScreen,
         "settings": SettingsScreen,
     }

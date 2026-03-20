@@ -13,6 +13,7 @@ ICON_CHAT     = "✉"    # U+2709  ENVELOPE
 ICON_NODES    = "◉"    # U+25C9  FISHEYE / node
 ICON_DEBUG    = "≡"    # U+2261  IDENTICAL TO  (data/signal lines)
 ICON_SETTINGS = "⚙"    # U+2699  GEAR
+ICON_MAP      = "⊕"    # U+2295  CIRCLED PLUS  (crosshairs / map pin)
 
 # ── Status indicators ──────────────────────────────────────────────────────
 DOT_ON  = "●"        # U+25CF

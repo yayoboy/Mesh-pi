@@ -48,6 +48,12 @@ pi-ina219>=1.4.1,<2.0.0
 # Thin wrapper around smbus2 that handles the BME280 compensation formulas.
 RPi.bme280>=0.2.4,<1.0.0
 
+# ── Offline map view ──────────────────────────────────────────────────────
+# Tkinter-native map widget with SQLite offline tile cache.
+# Optional: the map screen falls back to a Canvas Mercator renderer if absent.
+# Install on Pi: pip install tkintermapview
+tkintermapview>=2.0,<3.0
+
 # ── Notes ─────────────────────────────────────────────────────────────────
 # tkinter must be installed as a system package, NOT via pip:
 #   sudo apt-get install -y python3-tk

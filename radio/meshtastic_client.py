@@ -367,9 +367,12 @@ class MeshtasticClient:
         self.my_node_id = "!DEMO"
         self.my_node_name = "MESH-PI-DEMO"
         self.nodes = {
-            "!aabb": NodeInfo("!aabb", "Base Alpha",   "ALFA", rssi=-85,  snr=7.5,  hops=0, battery_level=80),
-            "!ccdd": NodeInfo("!ccdd", "Patrol Bravo", "BRAV", rssi=-102, snr=3.2,  hops=1, battery_level=45),
-            "!eeff": NodeInfo("!eeff", "Relay Charlie","CHAR", rssi=-78,  snr=10.1, hops=0, battery_level=12),
+            "!aabb": NodeInfo("!aabb", "Base Alpha",    "ALFA", rssi=-85,  snr=7.5,  hops=0, battery_level=80,
+                              latitude=45.6190, longitude=10.6700),
+            "!ccdd": NodeInfo("!ccdd", "Patrol Bravo",  "BRAV", rssi=-102, snr=3.2,  hops=1, battery_level=45,
+                              latitude=45.6890, longitude=10.7200),
+            "!eeff": NodeInfo("!eeff", "Relay Charlie", "CHAR", rssi=-78,  snr=10.1, hops=0, battery_level=12,
+                              latitude=45.5450, longitude=10.5100),
         }
         self.stats.rssi = -85
         self.stats.snr = 7.5

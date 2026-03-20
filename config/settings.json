@@ -81,6 +81,14 @@
         }
     },
 
+    "map": {
+        "tile_cache_path": "/tmp/map_tiles.db",
+        "tile_server": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "default_zoom": 12,
+        "default_lat": 45.619,
+        "default_lon": 10.670
+    },
+
     "i2c": {
         "bus": 1,
         "poll_interval_ms": 2000,
